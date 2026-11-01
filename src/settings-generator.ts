@@ -41,7 +41,7 @@
  */
 
 import { existsSync, realpathSync } from "node:fs";
-import { mkdir, mkdtemp, lstat, readdir, readFile, readlink, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, lstat, readdir, readFile, readlink, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
 
@@ -99,6 +99,19 @@ export const MANAGED_INSTANCE_FILES = new Set([
 	"pid",
 	"extensions",
 ]);
+
+/** Resource dirs a mode reader must see as REAL directories, never symlinks.
+ *
+ *  pi-modes fails closed on a mode path that crosses a symbolic-link boundary
+ *  (`mode path crosses symbolic-link boundary`), and the agent-dir mirror below
+ *  would otherwise link these into the instance — which silently disables every
+ *  mode and preset. They are copied instead, so pi-modes' fail-closed check stays
+ *  intact and still sees a plain directory tree. */
+const COPIED_RESOURCE_DIRS = ["modes", "mode-presets"] as const;
+
+function isCopiedResourceDir(name: string): boolean {
+	return (COPIED_RESOURCE_DIRS as readonly string[]).includes(name);
+}
 
 /** State directories that Pi and its extensions resolve under the agent dir,
  *  and which therefore appear at runtime rather than at install time. They are
@@ -872,7 +885,7 @@ export async function syncAgentSymlinks(agentDir: string, runtimeDir: string): P
 	try {
 		const runtimeEntries = await readdir(runtimeDir);
 		for (const name of runtimeEntries) {
-			if (MANAGED_INSTANCE_FILES.has(name)) continue;
+			if (MANAGED_INSTANCE_FILES.has(name) || isCopiedResourceDir(name)) continue;
 			const linkPath = path.join(runtimeDir, name);
 			const target = path.join(agentDir, name);
 			try {
@@ -898,7 +911,7 @@ export async function syncAgentSymlinks(agentDir: string, runtimeDir: string): P
 	try {
 		const entries = await readdir(agentDir);
 		for (const name of entries) {
-			if (MANAGED_INSTANCE_FILES.has(name)) continue;
+			if (MANAGED_INSTANCE_FILES.has(name) || isCopiedResourceDir(name)) continue;
 
 			const target = path.join(agentDir, name);
 			const linkPath = path.join(runtimeDir, name);
@@ -922,6 +935,35 @@ export async function syncAgentSymlinks(agentDir: string, runtimeDir: string): P
 			}
 		}
 	} catch {}
+
+	// 4. Materialize the dirs a mode reader refuses to follow through a symlink.
+	//    Runs last so the mirror above never creates a link it would have to undo.
+	await copyResourceDirs(agentDir, runtimeDir);
+}
+
+/** Copies the copied-resource dirs into the instance as real directories.
+ *  Best-effort: an absent source is skipped, and a failed copy leaves the
+ *  instance without those resources rather than failing activation. */
+async function copyResourceDirs(agentDir: string, runtimeDir: string): Promise<void> {
+	for (const name of COPIED_RESOURCE_DIRS) {
+		const src = path.join(agentDir, name);
+		const dest = path.join(runtimeDir, name);
+		try {
+			await stat(src);
+		} catch {
+			continue;
+		}
+		try {
+			await rm(dest, { recursive: true, force: true });
+		} catch {
+			// Best-effort: an absent destination is the normal case.
+		}
+		try {
+			await cp(src, dest, { recursive: true, force: true, dereference: true });
+		} catch {
+			// Best-effort: never fail activation because a resource copy failed.
+		}
+	}
 }
 
 /** Ensures the runtime state paths exist (or are linked) in the real agent dir
