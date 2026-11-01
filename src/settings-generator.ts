@@ -113,6 +113,8 @@ function isCopiedResourceDir(name: string): boolean {
 	return (COPIED_RESOURCE_DIRS as readonly string[]).includes(name);
 }
 
+export { isCopiedResourceDir };
+
 /** State directories that Pi and its extensions resolve under the agent dir,
  *  and which therefore appear at runtime rather than at install time. They are
  *  seeded in the REAL agent dir before mirroring, so the instance gets a

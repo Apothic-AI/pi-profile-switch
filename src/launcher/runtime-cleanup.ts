@@ -38,7 +38,7 @@ import type { Dirent } from "node:fs";
 import { lstat, readdir, readFile, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
 
-import { MANAGED_INSTANCE_FILES } from "../settings-generator.ts";
+import { MANAGED_INSTANCE_FILES, isCopiedResourceDir } from "../settings-generator.ts";
 import { getInstancesRootDir } from "../workspace.ts";
 
 /** Prefix of the directories this module owns under the instances root. */
@@ -229,6 +229,9 @@ async function classifyUnrecognized(dir: string, agentDir: string): Promise<Entr
 		}
 		// Symlinks only point at the real agent dir and hold no data of their own.
 		if (linkStat.isSymbolicLink()) continue;
+		// Materials this module copies in fresh on every launch: regenerated, never
+		// adopted, so they are not third-party state to protect.
+		if (isCopiedResourceDir(entry.name)) continue;
 		if (!MANAGED_INSTANCE_FILES.has(entry.name)) {
 			decisions.push(await decideEntry(entry.name, entryPath, dir, agentDir));
 			continue;
