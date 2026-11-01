@@ -41,6 +41,14 @@ pi-profile ask -- --model openai/gpt-5.4
 
 Without a profile name, the launcher tries the trusted project's saved selection, then the global saved selection, then `default`. A profile specified on the command line applies only to that launch.
 
+`PI_PROFILE` names a profile for that launch. It ranks below a command-line name and above both saved selections:
+
+```sh
+PI_PROFILE=worker pi-profile
+```
+
+Use it when the spawner already knows the role and the working directory cannot imply it — a worker that runs beside its leader shares the leader's directory, so a saved selection cannot tell the two apart. An empty value is the same as unset, and an unknown name fails the launch rather than falling back, so a mistyped role cannot silently start an unfiltered lane. Like a command-line name, it is not remembered for the next launch.
+
 When the global profile directory is empty, installation or startup writes the starter [`ask`](examples/ask.json). It disables user-level skills and extensions and keeps only read-only file tools; MCP servers remain available according to Pi's configuration. You can edit or delete it.
 
 ### Create and edit profiles

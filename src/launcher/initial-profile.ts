@@ -101,11 +101,21 @@ export async function resolveInitialProfile(
 ): Promise<InitialProfile> {
 	const { projectTrusted } = await readTrustInputs(context);
 	const projectDir = projectTrusted ? context.cwd : undefined;
-	let selected = name;
+	// PI_PROFILE is an explicit launch selection supplied by a spawner. Profile
+	// resolution is otherwise cwd-scoped, so a lane that shares its parent's
+	// working directory — a worker beside its leader — cannot be told apart from
+	// that parent by the saved selections. It ranks below a positional name and
+	// above every saved selection, and an unknown value fails loudly like a
+	// positional name does, because a spawner that mistypes should learn now
+	// rather than get a silently unfiltered lane.
+	const envProfile = process.env.PI_PROFILE?.trim() || undefined;
+	const explicitName = name ?? envProfile;
+	let selected = explicitName;
 	const warnings: string[] = [];
 	if (selected === undefined) {
-		// No positional name: the trusted project's saved selection is the more
-		// specific one and wins; otherwise the global state, then default.
+		// No positional name and no PI_PROFILE: the trusted project's saved
+		// selection is the more specific one and wins; otherwise the global state,
+		// then default.
 		if (projectTrusted) {
 			selected = (await new RuntimeStateStore(path.join(context.cwd, ".pi")).read()).activeProfile;
 		}
@@ -120,7 +130,7 @@ export async function resolveInitialProfile(
 		// Explicit positional selection fails loudly; a restored selection that
 		// no longer exists falls back to default with a warning instead of
 		// blocking the launch (restore is a convenience, not a commitment).
-		if (name !== undefined) {
+		if (explicitName !== undefined) {
 			throw new UnknownProfileError(selected);
 		}
 		warnings.push(`saved profile "${selected}" no longer exists; starting the default profile`);
