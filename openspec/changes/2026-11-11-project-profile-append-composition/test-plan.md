@@ -129,8 +129,9 @@ attempted `readFile`/`open`:
 - status names strategy, base path, project path, per-kind intent; reports `both` contributors; describes an
   unrestricted kind as native with the unapplied references and their file; reports a standalone `append` as
   informational, not as a failure, with the project's own per-kind intent and no unapplied list;
-- status reports a boot-pending tool reference as pending session-start resolution and never as a selected or
-  existing tool, and claims no resolved per-tool contributor;
+- status reports a boot-pending tool reference as **boot-snapshot pending with the current session outcome not
+  recorded (UNKNOWN)** and never as currently pending, selected, or existing, and claims no current resolved/dropped
+  outcome and no resolved per-tool contributor;
 - status performs no additional definition read (spy on `readFile`), no write, and no reapproval call;
 - list marks a composing winner without reading unrelated definitions;
 - an activation without composition produces byte-equivalent status output to today's.
