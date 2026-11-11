@@ -21,21 +21,30 @@ strategies, and it does not change what an existing file does.
 
 ## What Changes
 
-- Add an optional `promptStrategy` field to the profile schema's field set. `append` in a **project** definition
-  composes that definition with its same-named global definition; every other accepted value, and an absent
-  value, keeps complete replacement exactly as today.
+- Add an optional `promptStrategy` field. The accepted values are exactly two and are enumerated by the
+  governing contract, not deferred to a schema that lands later: in a **project** definition `append` composes
+  that definition with its same-named global definition, `replace` replaces it, and an omitted field means
+  `replace`; in a **global** definition `append` is rejected and `replace` is accepted and inert. The schema entry
+  added with the behavior mirrors this enumeration.
 - Compose as one pure merge at the catalog boundary: raw list declarations concatenate global-then-project and
   expand **exactly once** per kind, deduplicating by the resolved identity the existing contracts already use.
 - Enforce one governing rule: `append` may add to what the global half already allows and may never introduce a
   restriction the global half did not have. Narrowing stays with replacement and with the runtime overlay.
+- Separate the two composition inputs. No global file at all is the standalone branch: the project definition's own
+  lists, scalars, instructions, and child-role settings apply exactly as written, with no unapplied-reference
+  diagnostic and only informational metadata. A global file that exists and omits a kind is the composed branch,
+  where native visibility stands and the project's references for that kind are reported as unapplied.
 - Preserve the three-state grammar. A kind the composite leaves undeclared stays undeclared; a project reference
   that cannot apply to an undeclared kind is reported as an unapplied, unvalidated reference instead of being
   silently dropped or falsely attributed to the native selection.
 - Apply the same additive-only rule per MCP server: a project `mcp_tools` entry for a server the global half does
   not name is not applied and is diagnosed.
 - Carry reference provenance into the activation plan: contributor scopes per resolved identity, with extension
-  provenance keyed by resolved entry path (collision-safe), and tool provenance distinguishing a boot-resolved
-  tool from a raw reference still pending session-start resolution.
+  provenance keyed by resolved entry path (collision-safe), and tool provenance carrying three states — resolved at
+  boot, pending session-start resolution in a separate list that is never keyed as a tool, and dropped by the
+  session-start expansion through the existing dropped-literal diagnostic. Contributors are threaded through the
+  existing session-start expansion and its caller; no new runtime reader or backend is added, and status claims no
+  resolved per-tool contributor until an existing persistence surface carries one.
 - Render composition in the status and list surfaces without adding definition reads, writes, or any approval
   step.
 - Fail closed on three inputs only: a strategy value outside the accepted set, `append` in a global definition,
@@ -101,6 +110,9 @@ None. Every new requirement extends an existing capability domain.
 - No provider, model, or thinking probe; no reset of an existing session's model, thinking level, profile, or
   source.
 - No mandatory restart, no fleet reload, and no publication.
+- No present authorization to enumerate consumer catalog files or to delete/convert them. The rollback guard's
+  consumer enumeration and conversion is a design obligation for a future, separately reviewed release scope with
+  its own holds — not a broad filesystem-read or deletion grant implied by this change.
 
 ## Doc Impact
 

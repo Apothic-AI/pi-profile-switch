@@ -9,10 +9,22 @@ strategy, the path of the global base that was read, the path of the project fil
 each resource kind in the composite. It SHALL report, per selected resource, which scopes contributed it.
 A resource contributed by both halves SHALL be reported as such.
 
+For a standalone `append` definition — one whose base was never read — status SHALL report the strategy, the
+project path, the absence of a base as informational, and each kind's own declaration intent. It SHALL NOT report
+a base path, SHALL NOT list any reference as unapplied, and SHALL NOT describe the definition as composed with an
+empty base.
+
 For a kind the composite leaves undeclared, status SHALL describe the kind as unrestricted with native
-selection, SHALL NOT attribute any resource of that kind to a project reference, and SHALL list the unapplied
-references with their file. Those references SHALL be listed as unapplied and unvalidated; status MUST NOT
-report them as unknown, as zero-match, or as contributing to the effective selection.
+selection, SHALL NOT attribute any resource of that kind to a project or global reference, and SHALL list the
+unapplied references with their file. Those references SHALL be listed as unapplied and unvalidated; status MUST
+NOT report them as unknown, as zero-match, or as contributing to the effective selection.
+
+Status SHALL report declared tool references by state. A boot-stage pending reference SHALL be described as
+pending session-start resolution with its contributor scopes and MUST NOT be described as a selected or existing
+tool. A reference the session-start expansion dropped SHALL NOT be described as selected. Per-tool provenance
+resolved after session start SHALL be reported only where an existing persistence surface already carries it;
+until such a carrier exists status MUST NOT claim a resolved per-tool contributor and SHALL NOT add a reader for
+it. No tool entry SHALL be described as pending after a session-start expansion has resolved or dropped it.
 
 A profile list entry whose winning definition composes with a global namesake SHALL be identifiable as such in
 the list output, without reading unrelated definitions.
@@ -34,12 +46,17 @@ perform additional definition reads, writes, or reapproval steps.
 #### Scenario: Unrestricted kind is described honestly
 
 - **WHEN** the composite leaves `skills` undeclared and the project half declared skill references
-- **THEN** status describes skills as unrestricted with native selection and lists the project references as unapplied and unvalidated
+- **THEN** status describes skills as unrestricted with native selection, attributes no natively selected skill to a half, and lists the project references as unapplied and unvalidated
 
 #### Scenario: Standalone append is visible
 
 - **WHEN** the active definition declares `append` and no global namesake exists
-- **THEN** status reports the missing base as informational rather than as an activation failure
+- **THEN** status reports the missing base as informational, describes each kind by the project definition's own declaration intent, and lists no reference as unapplied
+
+#### Scenario: Pending and resolved tools are not conflated
+
+- **WHEN** the active plan declares a tool reference the boot expansion did not resolve
+- **THEN** status reports it as pending session-start resolution with its scopes, not as a selected tool, and reports no resolved per-tool contributor unless an existing persistence surface carries one
 
 #### Scenario: Status does not contradict the overlay
 

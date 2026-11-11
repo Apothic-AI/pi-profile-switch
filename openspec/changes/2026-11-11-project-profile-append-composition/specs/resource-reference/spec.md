@@ -9,17 +9,26 @@ declaration: the global half's raw declarations followed by the project half's r
 reference list SHALL be expanded exactly once per resource kind. Expanding each half separately and combining
 the results MUST NOT be used, because it invents per-scope matches that the merged declaration does not imply.
 
+This requirement applies when a same-named global base **exists and was read**. When no global base exists at
+all, the definition is not a merge of two halves: "Standalone append declaration intent" governs, and the single
+project declaration list is expanded unchanged.
+
 Selection SHALL deduplicate by resolved identity — skill name, MCP server name, resolved extension entry path,
 and expanded tool name — using the identities the existing resolution contracts already define. Raw `tools`
 references SHALL additionally be deduplicated by exact string before expansion. Reference order SHALL be global
 declarations then project declarations, so the merged order is deterministic.
 
-Every selected identity SHALL carry the set of scopes whose raw declarations contributed to it: `global`,
-`project`, or both. Contribution SHALL be recorded per raw declaration that produced the identity, and
-contribution sets SHALL be unioned. An identical literal declared in both halves SHALL report both scopes. A
-glob in one half and a literal in the other that resolve to the same identity SHALL report both scopes. A
-package alias in one half and an entry name in the other that resolve to the same identity SHALL report both
-scopes. First-contributor attribution MUST NOT be used.
+Every selected identity produced by an applied declared reference SHALL carry the set of scopes whose raw
+declarations contributed to it: `global`, `project`, or both. Contribution SHALL be recorded per raw declaration
+that produced the identity, and contribution sets SHALL be unioned. An identical literal declared in both halves
+SHALL report both scopes. A glob in one half and a literal in the other that resolve to the same identity SHALL
+report both scopes. A package alias in one half and an entry name in the other that resolve to the same identity
+SHALL report both scopes. First-contributor attribution MUST NOT be used.
+
+This contributor claim is scoped to identities produced by applied declared references. An identity that is
+selected only because its kind is unrestricted stays native: it SHALL NOT be given a `global`, `project`, or
+`both` contributor, because no declaration produced it. The disjoint treatment of native selection is defined in
+"Composite declaration intent and unapplied references" and "Reference provenance in the activation plan".
 
 A resource that user-native settings or package filters exclude from discovery SHALL remain unselectable under a
 composed definition; a diagnostic SHALL be produced instead of a selection. A resource that is eligible in
@@ -55,11 +64,63 @@ discovery but absent from the global half's allowlist SHALL remain selectable th
 - **WHEN** an eligible skill exists in discovery and the global half's `skills` allowlist omits it while the project half declares it
 - **THEN** the composed definition selects the skill
 
+### Requirement: Standalone append declaration intent
+
+Absence of the entire global base SHALL be a distinct composition branch from a global base that exists while
+omitting a declaration. When no same-named global definition exists, the resolved definition SHALL be the
+project definition's own standalone definition: each resource list SHALL be applied exactly as that project
+declaration defines it, with no inheritance, no widening step, and no unrestricted-kind substitution.
+
+For a standalone `append` definition:
+
+- A declared project list SHALL be applied as declared, including a list of one or more references and a
+  declared empty list.
+- An omitted project list SHALL stay undeclared and carry native visibility, exactly as in a standalone
+  definition today.
+- Project `instructions`, scalar settings, native child-role settings, and `mcp_tools` SHALL keep their
+  standalone meaning.
+- No project reference SHALL be reported as unapplied, and the kind-level unapplied-reference diagnostic that
+  belongs to a base which omits a kind SHALL NOT be produced, because there is no base whose declaration could
+  be widened.
+- The only composition output SHALL be informational metadata: the strategy, the fact that no base was read, and
+  an `append-standalone` diagnostic naming the absent base.
+
+The standalone result MUST NOT be attributed to a global contributor, MUST NOT be described as composed with an
+empty base, and MUST NOT be treated as a widening of native visibility. An existing but malformed global base
+remains a fail-closed error under the same-named global rules; only a wholly absent base takes this branch.
+
+#### Scenario: Standalone append applies the project lists in full
+
+- **WHEN** a trusted project definition declares `append`, no same-named global definition exists, and it declares `skills: ["a","b"]` and `tools: ["read","edit"]`
+- **THEN** the selected skills are exactly `a` and `b`, and the selected tools are exactly what the unchanged expansion of `read` and `edit` yields, with no unapplied-reference diagnostic
+
+#### Scenario: Standalone append keeps a declared empty list empty
+
+- **WHEN** a standalone `append` definition declares `skills: []`
+- **THEN** `skills` is a declared empty selection and nothing is selected in that kind
+
+#### Scenario: Standalone append leaves an omitted kind native
+
+- **WHEN** a standalone `append` definition omits `skills`
+- **THEN** `skills` stays undeclared, native visibility applies, and no unapplied-reference diagnostic is produced
+
+#### Scenario: Standalone append keeps scalars, instructions and child roles as declared
+
+- **WHEN** a standalone `append` definition declares `instructions`, `defaultThinkingLevel`, and `subagents`
+- **THEN** each keeps exactly its standalone meaning, with no concatenation step, no inheritance step, and no per-key merge
+
+#### Scenario: Standalone result carries no global contributor
+
+- **WHEN** a standalone `append` definition is resolved
+- **THEN** no selected identity reports a `global` contributor, and only the missing-base diagnostic describes the composition
+
 ### Requirement: Composite declaration intent and unapplied references
 
 A composed definition SHALL preserve the existing three-state declaration grammar per kind: a kind with no
-effective declaration SHALL remain undeclared, never an explicitly empty selection. Declaration intent SHALL be
-derived from the composed halves as follows.
+effective declaration SHALL remain undeclared, never an explicitly empty selection. This requirement applies
+when a same-named global base exists and is read; when no base exists, "Standalone append declaration intent"
+governs and the derivation below does not apply. Declaration intent SHALL be derived from the composed halves as
+follows.
 
 - A project half that omits a list or declares it empty SHALL contribute nothing.
 - A global half that declares an empty list SHALL remain a declared base, so project references widen it.
@@ -71,7 +132,8 @@ references: a static, deterministic diagnostic that names the file and each unap
 diagnostic SHALL state that the references were not validated against discovery. An unapplied reference MUST NOT
 be reported as an unknown reference, MUST NOT produce a zero-match warning, and MUST NOT be attributed to any
 selected resource. The composed definition MUST NOT claim that a dropped reference contributed to native
-selection.
+selection, and a natively selected resource MUST NOT be reported as contributed by `global` or `project` —
+native selection is recorded as a kind-level intent, not as a per-identity contributor.
 
 Project-instructions text SHALL be appended to the global half's instructions without replacing it, dropping a
 byte-identical duplicate. Scalar settings SHALL be overridden per field, with an undeclared project scalar
@@ -85,6 +147,11 @@ declaration and its keys are not merged.
 
 - **WHEN** the global half omits `skills` and the project half declares `skills: ["review"]`
 - **THEN** the composed definition leaves `skills` undeclared, native visibility applies, and a diagnostic names `review` as unapplied and unvalidated
+
+#### Scenario: Native resources are not falsely attributed
+
+- **WHEN** the global half omits `skills`, the project half declares `skills: ["review"]`, and discovery provides other skills natively
+- **THEN** every natively selected skill reports no `global` or `project` contributor, `review` is listed as unapplied and unvalidated, and no provenance/selection invariant fails
 
 #### Scenario: Declared empty base is widened
 
@@ -119,7 +186,9 @@ declaration and its keys are not merged.
 ### Requirement: Per-server MCP tool policy in a composed definition
 
 Per-server MCP tool policy SHALL follow the additive-only rule of a composed definition, evaluated per server
-key against what the global half already allows.
+key against what the global half already allows. This requirement applies when a same-named global base exists
+and is read; a standalone `append` definition applies its own `mcp_tools` with the standalone meaning of the
+field, and no `append-cannot-narrow` diagnostic is produced for it because there is no base to narrow.
 
 A project entry for a server that the global half does not name SHALL NOT be applied, and SHALL be reported as a
 diagnostic naming the server and stating that a composed definition cannot introduce a restriction. A project
@@ -158,9 +227,11 @@ field error naming the file, the reference, and the reason: the current glob sem
 negation gate, so such a reference would select every resource except its own pattern instead of adding to the
 selection.
 
-The guard SHALL apply only to the project half of a composed definition. The same reference in a global
-half, and in any definition using complete replacement, SHALL keep exactly today's behavior: not rejected, not
-reinterpreted, not repaired. The generic leading-`!` grammar question SHALL remain outside this change.
+The guard SHALL apply to a project half that declares `append`, whether or not a same-named global base exists:
+the inversion is a property of the project declaration's own glob, so a standalone `append` definition carries the
+same rejection. The same reference in a global half, and in any definition using complete replacement, SHALL keep
+exactly today's behavior: not rejected, not reinterpreted, not repaired. The generic leading-`!` grammar question
+SHALL remain outside this change.
 
 #### Scenario: Negated glob in an append project half fails closed
 
@@ -182,11 +253,44 @@ Extension provenance SHALL be keyed by the resolved entry path, which is the ide
 deduplicates on, and MAY carry the resolved extension identifier as an additional value. An identifier-only
 key MUST NOT be used, because distinct entries can share an identifier.
 
-Tool provenance SHALL distinguish a resolved tool from a raw reference that has not resolved yet. A tool
-expanded before session start SHALL report the boot stage. A raw tool reference that matches no built-in tool
-SHALL remain a pending session-start reference with its contributor scopes and MUST NOT be presented as an
-existing runtime tool. When per-tool provenance is promised after session-start expansion, contributors SHALL be
-propagated through the existing session-start expansion rather than through a new runtime reader.
+Tool provenance SHALL be a state record, not an existence flag, and it SHALL separate the two moments at which a
+tool becomes knowable. Exactly three states are defined:
+
+- **`resolved`** — the raw reference matched a live tool name. For a tool resolved before session start the state
+  is `resolved` at the boot stage, limited to built-in names, which is all the pre-spawn registry can know. At
+  session start it covers built-in, extension-provided, and MCP-provided names.
+- **`pending`** — a raw declared reference the boot expansion did not resolve. Pending is a **boot-stage state
+  only**, and it SHALL NOT be keyed by a name on the tool map: a name key would present a raw reference as if it
+  were a tool. Pending references SHALL live in a separate declarative list carrying the verbatim reference, its
+  contributor scopes, and the stage at which it becomes knowable (`session-start`).
+- **`dropped`** — a reference the session-start expansion confirmed matches nothing in the live registry, or one
+  that matched only MCP-owned tools. Dropped SHALL be reported through the existing dropped-literal and
+  legacy-MCP-reference diagnostic paths, SHALL NOT remain pending after session-start, and SHALL NOT be presented
+  as an existing tool.
+
+At session start every pending reference SHALL transition to exactly one of `resolved` or `dropped`. A plan read
+after a session-start expansion MUST NOT report a permanently pending reference, and the transition MUST NOT
+suppress or replace the existing dropped-literal and legacy-MCP-reference diagnostics. A reference that resolves
+to a real extension tool, a reference that matches nothing, a glob that matches nothing, and a reference removed
+by the overlay are four different outcomes and SHALL be reported as such.
+
+Contributors SHALL be threaded through the **existing** session-start expansion and its existing caller, which
+receive the composer's per-reference contributor map, union contributors per expanded identity, and return the
+three states. No new runtime reader, backend, extension, or status path SHALL be introduced. Resolved
+post-session-start per-tool provenance SHALL be claimed only where an existing persistence surface actually
+carries it; until such a carrier exists, status SHALL describe the plan's pending and declared tool references
+and MUST NOT claim a resolved per-tool contributor.
+
+A callback that fires per selected identity SHALL NOT be counted as proof that expansion ran once: overlapping
+references can fire it several times for the same identity. Expansion invocations SHALL be measured separately,
+and contributor sets SHALL be unioned per identity so repeated callbacks are idempotent.
+
+Provenance agreement SHALL be scoped to identities produced by applied declared references. Every identity
+selected through an applied declared reference SHALL have a provenance entry, and every provenance entry SHALL
+name an identity present in the effective selection. An identity selected only because its kind is unrestricted
+SHALL be reported as native: it MAY have no per-identity entry, or an entry carrying the disjoint provenance kind
+`native`, and it MUST NOT carry `global`, `project`, or `both`. A native identity entered this way SHALL NOT be a
+provenance/selection disagreement.
 
 Provenance SHALL be presentation only: it MUST NOT influence selection, and a disagreement between provenance
 and selection SHALL be treated as a defect rather than a runtime fallback. A plan produced without composition
@@ -196,25 +300,35 @@ Provenance SHALL describe the resource selection that is currently effective. An
 overlay SHALL NOT be reported as currently selected, regardless of which scope originally contributed it; an
 overlay-removed identity MAY appear only as a disabled entry.
 
-#### Scenario: Provenance cannot disagree with selection
+#### Scenario: Provenance cannot disagree with selection for declared identities
 
 - **WHEN** a composed definition is resolved
-- **THEN** every identity in the provenance map is present in the selection, and every selected identity has provenance entry
+- **THEN** every identity in the provenance map is present in the selection, and every identity selected through an applied declared reference has a provenance entry
+
+#### Scenario: Native selection is not a disagreement
+
+- **WHEN** a composed definition selects a skill natively because its kind is undeclared
+- **THEN** the skill is reported as native, carries no `global`, `project`, or `both` contributor, and does not fail the provenance/selection agreement
 
 #### Scenario: Extension provenance is collision-safe
 
 - **WHEN** two distinct extension entries would share an identifier
 - **THEN** provenance keeps them distinct by resolved entry path, and neither entry's scopes are merged into the other
 
-#### Scenario: Unresolved raw tool reference stays pending
+#### Scenario: Unresolved raw tool reference stays pending at boot
 
 - **WHEN** a composed definition declares a tool reference no built-in tool provides
-- **THEN** it is reported once as a pending session-start reference with its scopes, and not as an existing tool
+- **THEN** it is listed once in the separate pending list with its scopes and the session-start stage, is not keyed as a tool name, and is not reported as an existing tool
 
 #### Scenario: Boot and session-start tools are distinguished
 
 - **WHEN** a composed definition declares one built-in tool and one extension-provided tool
-- **THEN** the built-in tool reports the boot stage and the extension tool is resolved at session start
+- **THEN** the built-in tool reports `resolved` at the boot stage and the extension tool reports `resolved` at session start
+
+#### Scenario: Session start resolves or drops every pending reference
+
+- **WHEN** the session-start expansion runs for a plan carrying a pending reference
+- **THEN** the reference becomes `resolved` if a live tool provides it and `dropped` otherwise, no reference remains pending, and the existing dropped-literal diagnostic is unchanged
 
 #### Scenario: Non-composed plan is unchanged
 

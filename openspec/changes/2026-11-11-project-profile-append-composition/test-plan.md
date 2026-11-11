@@ -15,13 +15,15 @@ Pure function, no I/O stubs needed beyond the module under test.
 | # | Case | Pins |
 | --- | --- | --- |
 | 1.1 | every row of `matrices.md` §1 for `skills`; then the same table once per remaining kind | "Composite declaration intent and unapplied references", "Composed reference declarations" |
+| 1.1b | every row of `matrices.md` §1b (no global file): project list applied in full, `[]` stays a declared empty selection, omitted kind stays native, no `append-unapplied-reference`, no `global` contributor, and the only diagnostic is `append-standalone` | "Standalone append declaration intent" (five scenarios) |
 | 1.2 | unrestricted rows emit `undefined`, never `[]` | "Unrestricted rows never become empty selections" |
 | 1.3 | `matrices.md` §2 rows 1–6, including "project key for a server the base does not name ⇒ no entry + diagnostic" | "Per-server MCP tool policy in a composed definition" (4 scenarios) |
 | 1.4 | `matrices.md` §3 rows for the model pair, thinking level, `instructions` (incl. identical duplicate), `subagents` whole-field override, `label`/`description` | "Composite declaration intent…" scalar/instructions/subagent scenarios |
 | 1.5 | exact diagnostic text and codes for `append-unapplied-reference`, `append-cannot-narrow`, `append-standalone`, including the file named in the message | "Unrestricted kind keeps native selection with an honest diagnostic", "Project key for an unnamed server is not applied" |
-| 1.6 | contributor sets: identical literal ⇒ `both`; global glob + project literal ⇒ `both`; extension alias + entry name ⇒ `both` | "Composed reference declarations" (3 attribution scenarios) |
+| 1.6 | contributor sets: identical literal ⇒ `both`; global glob + project literal ⇒ `both`; extension alias + entry name ⇒ `both`; the same identity selected twice reports one unioned set | "Composed reference declarations" (3 attribution scenarios) |
 | 1.7 | `!foo*` in a project `append` half ⇒ error naming file, reference, reason; the same reference in a replacement definition and a global half is untouched | "Negated glob in an append project half fails closed", "Replacement definitions keep today's behavior" |
 | 1.8 | an invalid strategy value, a global `append`, and a global replacement value (accepted, inert) | "Unsupported strategy value is a field error", "Append in a global definition is rejected", "Replacement value in a global definition is inert" |
+| 1.10 | the accepted enumeration is exactly `append` and `replace`; project `replace` is identical to an omitted field; a third value such as `merge` is rejected — asserted from the contract, with no dependency on a schema that does not exist yet | "Only two strategy values are accepted", "Project replace value replaces explicitly" |
 | 1.9 | static import assertion: the module imports no `node:fs`, `node:fs/promises`, discovery module, or clock | purity obligation in `design.md` |
 
 `npx vitest run test/profile-composition.test.ts`
@@ -45,7 +47,7 @@ attempted `readFile`/`open`:
 | 2.5 | untrusted project with `.pi/profiles/leader.json` present | no attempt under `<cwd>/.pi/profiles`, **and** the global definition was read (ordinary leader still resolves) |
 | 2.6 | trusted project winning with replacement | no attempt on the global profile path |
 | 2.7 | trusted project winning with `append` and a namesake | both paths attempted exactly once each |
-| 2.8 | trusted project winning with `append`, no namesake | no global attempt, standalone result, informational diagnostic |
+| 2.8 | trusted project winning with `append`, no namesake: no global attempt, standalone result, informational diagnostic, **and the selected contents are asserted** — the selected skill set equals exactly the project's declared skills that discovery provides, the tool expansion equals the unchanged expansion of the declared tool references, and no reference is listed as unapplied | "Standalone append applies the project lists in full", "Standalone append keeps a declared empty list empty", "Standalone append leaves an omitted kind native" |
 
 `npx vitest run test/profile-catalog.test.ts test/project-trust.test.ts test/initial-profile.test.ts`
 
@@ -56,12 +58,14 @@ attempted `readFile`/`open`:
 | # | Case | Pins |
 | --- | --- | --- |
 | 3.1 | contributor scope per identity: global-only, project-only, both (literal+literal, glob+literal, alias+entry name) | "Composed reference declarations" |
-| 3.2 | each kind expands once — count `onSelect` invocations per raw reference; a duplicated identity reports one contributor union, not two | "Each kind expands once" |
+| 3.2 | each kind expands once — count **expansion invocations** by instrumenting the expansion function per kind (and `DiscoveredExtensions.select`), never by counting `onSelect` callbacks, which can fire several times for one identity when refs overlap; separately assert an overlapping glob/literal fires the callback more than once for one identity and that the contributor union stays idempotent | "Each kind expands once" |
 | 3.3 | extension provenance keyed by resolved entry path; two entries sharing an identifier keep distinct keys and distinct contributors | "Extension provenance is collision-safe" |
-| 3.4 | tools: built-in ⇒ `at: "boot"`; package-extension tool ⇒ resolved at session start; unmatched raw literal ⇒ pending `session-start` with scope, never `unknown`, never an existing tool | "Unresolved raw tool reference stays pending", "Boot and session-start tools are distinguished" |
+| 3.4 | tools: built-in ⇒ `state: "resolved"`, `at: "boot"`; package-extension tool ⇒ resolved at session start; unmatched raw literal ⇒ listed in the separate `pendingToolReferences` list with scope and `resolvesAt: "session-start"`, never keyed as a tool name, never `unknown`, never an existing tool | "Unresolved raw tool reference stays pending at boot", "Boot and session-start tools are distinguished" |
 | 3.5 | tool reference forms: literal and glob, global/project overlap, zero matches, and preserved activation selection (the expanded tool set is unchanged by the trace) | "Reference provenance in the activation plan" |
 | 3.6 | overlay disables a selected resource ⇒ absent from origins, present at most as a disabled entry; overlay glob removal likewise | "Overlay-removed resource is not currently selected" |
-| 3.7 | provenance/selection agreement both ways for a composed definition | "Provenance cannot disagree with selection" |
+| 3.7 | provenance/selection agreement both ways for a composed definition, scoped to identities produced by applied declared references | "Provenance cannot disagree with selection for declared identities" |
+| 3.10 | native selection is not a disagreement: existing global omits `skills`, project declares `skills: ["review"]`, discovery provides other skills ⇒ native skills carry no `global`/`project` contributor, `review` is unapplied, and the agreement invariant does not fire | "Native resources are not falsely attributed", "Native selection is not a disagreement" |
+| 3.11 | session-start transition: a boot-pending reference resolves against a live extension tool in one case, drops for a nonexistent literal and for a no-match glob in two others; no reference stays pending, and the existing dropped-literal diagnostic text is unchanged | "Session start resolves or drops every pending reference" |
 | 3.8 | resolver freeze: a replacement resolution's plan minus provenance fields is deep-equal to a recorded pre-change plan across skills/extensions/mcps/tools/overlay cases | non-composed byte-identity obligation |
 | 3.9 | a non-composed plan serializes byte-identically (compare serialized JSON from both code paths) | "Non-composed plan is unchanged" |
 
@@ -73,7 +77,13 @@ attempted `readFile`/`open`:
 
 - contributors received from the plan survive the session-start re-expansion; per-tool contributors are reported
   for live tools; `droppedLiterals` and `legacyMcpReferences` behavior is unchanged; no new reader or backend is
-  introduced (assert the module's import surface).
+  introduced (assert the module's import surface);
+- a boot-pending reference becomes `resolved` for a valid extension tool, `dropped` for a nonexistent name, and
+  `dropped` for a no-match glob, with exactly one of the three reported per reference and nothing left pending;
+- the resolved per-tool map is returned in-process by the existing caller and is not claimed by status, because the
+  plan file that status reads is written before session start (assert that no extra plan write is introduced);
+- the plan file for a composed activation carries `composition`, the provenance maps, and
+  `pendingToolReferences`; the plan file for an uncomposed activation carries none of them.
 - the plan file for a composed activation carries `composition` and the provenance maps; the plan file for an
   uncomposed activation does not.
 
@@ -114,7 +124,9 @@ attempted `readFile`/`open`:
 
 - status names strategy, base path, project path, per-kind intent; reports `both` contributors; describes an
   unrestricted kind as native with the unapplied references and their file; reports a standalone `append` as
-  informational, not as a failure;
+  informational, not as a failure, with the project's own per-kind intent and no unapplied list;
+- status reports a boot-pending tool reference as pending session-start resolution and never as a selected or
+  existing tool, and claims no resolved per-tool contributor;
 - status performs no additional definition read (spy on `readFile`), no write, and no reapproval call;
 - list marks a composing winner without reading unrelated definitions;
 - an activation without composition produces byte-equivalent status output to today's.
@@ -150,6 +162,10 @@ attempted `readFile`/`open`:
 | Guard removed | Test that fails |
 | --- | --- |
 | contributor union replaced by first-writer | §1.6, §3.1 |
+| standalone branch collapsed into "empty base" (refs reported unapplied) | §1.1b, §2.8 |
+| universal per-identity contributor rule applied to native selection | §3.7, §3.10 |
+| boot-pending reference keyed as a tool name or left pending after session start | §3.4, §3.11, §4 |
+| resolved per-tool status claimed without an existing persistence carrier | §4, §7 |
 | extension provenance keyed by identifier | §3.3 |
 | boot pass-through treated as a resolved tool | §3.4 |
 | overlay-removal filter dropped from origins | §3.6 |
@@ -165,7 +181,7 @@ attempted `readFile`/`open`:
 
 | Fact used by artifacts | Source |
 | --- | --- |
-| accepted strategy values | `schemas/profiles.schema.json` (added in the implementation stage) |
+| accepted strategy values | `openspec/changes/2026-11-11-project-profile-append-composition/specs/profile-catalog/spec.md` "Profile composition strategy" (the contract itself; `schemas/profiles.schema.json` mirrors it in the implementation stage) |
 | existing supported fields and shapes | `schemas/profiles.schema.json` |
 | catalog indexing, winner selection, parse loop, `supportedFields` use | `src/profile-catalog.ts` |
 | expansion, dedupe identity, three-state intent, boot tool pass-through | `src/profile-resolver.ts` |

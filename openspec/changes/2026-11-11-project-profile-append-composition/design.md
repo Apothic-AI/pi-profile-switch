@@ -48,6 +48,8 @@ New: `src/profile-composition.ts` — pure, no `node:fs` and no discovery import
 ```ts
 export type ContributorScope = "global" | "project";
 export type ContributorSet = "global" | "project" | "both";
+/** Disjoint kind for an identity selected because its kind is undeclared. */
+export type ProvenanceKind = ContributorSet | "native";
 
 export interface UnappliedReference {
   kind: "skills" | "extensions" | "mcps" | "tools" | "mcp_tools";
@@ -61,12 +63,23 @@ export interface CompositionDiagnostic {
   message: string;            // actionable, names the file and the fix
 }
 
+/** A raw tool reference the boot expansion could not resolve. Never keyed as a tool. */
+export interface PendingToolReference {
+  reference: string;          // verbatim as declared
+  contributors: ContributorSet;
+  resolvesAt: "session-start";
+}
+
 export interface CompositionResult {
   definition: ProfileDefinition;
-  /** Per raw reference: the scopes that declared this exact literal. */
+  /** Per raw reference: the scopes that declared this exact literal. On the standalone branch, the
+   *  project's own literals map to `project`. */
   referenceContributors: Record<kind, Record<string, ContributorSet>>;
+  /** Always empty on the standalone branch: there is no base whose declaration could be widened. */
   unapplied: UnappliedReference[];
   diagnostics: CompositionDiagnostic[];
+  /** `"standalone"` when no base was read; `"composed"` otherwise. */
+  branch: "composed" | "standalone";
 }
 
 export function composeProfileDefinitions(
@@ -75,6 +88,13 @@ export function composeProfileDefinitions(
   options: { globalPath?: string; projectPath: string },
 ): CompositionResult;
 ```
+
+`global === undefined` is its own branch, not an empty base. On that branch the function returns the project
+definition unchanged, maps each declared project literal to `project`, returns an empty `unapplied` list, and emits
+`append-standalone` as its only diagnostic. Every rule below that mentions "the global half" is defined for an
+existing base and is not evaluated on this branch — in particular the unrestricted-kind rule ("the base omits a
+kind, so the project's references for it are unapplied") must not fire, because a non-existent base has no
+declaration to widen.
 
 `referenceContributors` is keyed by the raw literal so the *resolver* can attribute every identity it resolves,
 including through globs and package aliases. It is not keyed by identity: the composer has no discovery and
@@ -90,14 +110,22 @@ export interface ResolveInput {
 
 export interface ActivationPlan {
   // ...existing fields
-  origins?: Partial<Record<Kind, Record<string, ContributorSet>>>;      // skills, mcps
+  origins?: Partial<Record<Kind, Record<string, ProvenanceKind>>>;   // skills, mcps; `native` only for an
+                                                                   // identity selected through no declaration
   extensionOrigins?: Record<string, { id: string; contributors: ContributorSet }>;  // keyed by entry path
-  toolOrigins?: Record<string, { contributors: ContributorSet; at: "boot" | "session-start" }>;
+  /** Resolved tools only, keyed by live tool name. */
+  toolOrigins?: Record<string, { contributors: ContributorSet; state: "resolved"; at: "boot" | "session-start" }>;
+  /** Raw references the boot expansion could not resolve. A separate list, never a name key. */
+  pendingToolReferences?: PendingToolReference[];
 }
 
 function expandReferences<T>(/* ...existing... */, options?: {
   // ...existing options
-  /** Called for every identity this expansion sets, with the raw reference that produced it. */
+  /**
+   * Called for every identity this expansion sets, with the raw reference that produced it.
+   * MAY fire more than once for the same identity (overlapping refs); callers MUST union contributors
+   * idempotently and MUST NOT use callback count as an expansion count.
+   */
   onSelect?: (identity: string, reference: string) => void;
 }): T[];
 ```
@@ -117,9 +145,15 @@ async select(
 Changed: `src/switching/tool-references.ts` — contributor propagation only, no new reader.
 
 ```ts
+export type ToolState = "resolved" | "dropped";
+
 export interface ToolExpansion {
-  // ...existing fields
-  contributors?: Record<string, ContributorSet>;   // per expanded live tool name
+  // ...existing fields (expanded, droppedLiterals, legacyMcpReferences)
+  /** Per expanded live tool name: the union of reference contributors, from the plan's raw map. */
+  contributors?: Record<string, ContributorSet>;
+  /** Session-start outcomes for references that were pending at boot. `dropped` entries are exactly the
+   *  references already reported through `droppedLiterals` / `legacyMcpReferences`; nothing stays pending. */
+  outcomes?: Record<string, { state: ToolState; contributors: ContributorSet }>;
 }
 
 export function expandToolReferences(
@@ -130,8 +164,17 @@ export function expandToolReferences(
 ): ToolExpansion;
 ```
 
-Changed: `src/switching/apply-plan.ts` — `LaunchPlanFile` gains optional `composition` and the three provenance
-maps; nothing else in that module moves. `src/switching/status.ts` and `src/switching/list-profiles.ts` read them.
+The three states are exhaustive and each transition is defined: boot `resolved` (built-in name only), boot
+`pending` (raw reference, in the separate list), then session start `resolved` or `dropped`. `droppedLiterals`
+keeps its existing meaning and diagnostic; `outcomes` records the same facts per reference so the caller can
+attribute them, and adds no new warning path. The caller is the existing `applyLaunchPlan` tool block; no other
+module reads tool state.
+
+Changed: `src/switching/apply-plan.ts` — `LaunchPlanFile` gains optional `composition`, the provenance maps, and
+`pendingToolReferences`; nothing else in that module moves. `src/switching/status.ts` and
+`src/switching/list-profiles.ts` read them. The plan file is written before session start, so it can carry only
+declared/pending tool state; a resolved post-session-start per-tool map has no existing carrier and is therefore
+not promised to status (see the status promise above).
 
 ## Decisions
 
@@ -146,10 +189,28 @@ maps; nothing else in that module moves. `src/switching/status.ts` and `src/swit
 - **Extension provenance keyed by resolved entry path.** Identifier-only keys can merge distinct entries; the
   selection already deduplicates by entry path, so the key follows the identity. ADR required:
   `profile-composition-provenance-keys`.
-- **Tools keep two coordinates, and an unresolved raw reference stays pending.** Boot expansion passes unknown
-  literals through, so presence in the boot plan proves nothing about a runtime tool. Session-start is the only
-  moment a tool's existence is knowable, so provenance there comes from the existing expansion, extended with a
-  contributor map — no new backend, no extra reader.
+- **Tools carry three states, and pending is a boot-only state.** Boot expansion passes unknown literals
+  through, so presence in the boot plan proves nothing about a runtime tool; a raw unmatched reference is a
+  separate pending entry, never a name key on the tool map. Session-start is the only moment a tool's existence
+  is knowable, so it resolves or drops every pending reference through the existing expansion. Resolved
+  post-session-start provenance is in-process only until an existing persistence surface carries it, so status
+  makes no resolved per-tool claim. ADR required: `tool-provenance-states`.
+- **Standalone is a branch, not an empty base.** Decided because the two inputs are different questions: a
+  non-existent base has no declaration to widen, so the project's own lists are the selection; a base that exists
+  and omits a kind does have a declaration, and the project may not narrow native visibility. Collapsing the two
+  would silently drop a standalone project's references as "unapplied". ADR required:
+  `standalone-append-semantics`.
+- **Accepted values are enumerated by the contract, not the schema.** The governing spec names exactly `append`
+  and `replace`, the per-scope validity, and the omitted default. The schema mirrors the enumeration in the
+  implementation stage; a design gate cannot cite a schema that does not exist yet. ADR required:
+  `prompt-strategy-values`.
+- **Provenance agreement is scoped to declared selection.** Decided because a universal "every selected identity
+  has a contributor" rule is false for native selection: a resource selected because its kind is undeclared was
+  produced by no declaration. Native identities therefore carry the disjoint kind `native` (or no entry), never a
+  fabricated `global`/`project` contributor. ADR required: `native-selection-provenance`.
+- **Repeated callbacks are not expansion counts.** An overlapping glob/literal fires the per-identity callback
+  several times for one identity; the expansion-count test must instrument the expansion invocation itself, and
+  contributor sets are unioned so repeats are idempotent.
 - **Unapplied references are static and unvalidated.** Adding a second resolver input for an advisory would
   widen the resolver for a diagnostic; the honest alternative is a fixed diagnostic that states the references
   were not validated. ADR required: `append-unapplied-reference-diagnostic`.
@@ -194,9 +255,11 @@ Four distinct operations, never "restart/reload" as one instruction:
    `/profile use` runs its own existing path. These are not interchangeable.
 4. **Old extension code hazard.** Extension code already loaded in a lane cannot gain a new command
    implementation before re-import. A lane served by old code ignores an unknown `promptStrategy`, warns, and
-   **replaces** — the destructive outcome this change removes. Only lanes whose directory contains an `append`
-   project file are affected, and only after the install. No mandatory restart and no silent model, thinking,
-   profile, or source switch is performed by this change.
+   **replaces** — the destructive outcome this change removes. The hazard exists whenever an `append` file is
+   resolved by older code, not only after an install: a pre-existing `append` file meeting an older build, a
+   rollback, another installation or pin that lacks the field, and a lane whose loaded code predates the feature
+   all reach the same replace-with-warning outcome. Install order does not make a file safe. No mandatory restart
+   and no silent model, thinking, profile, or source switch is performed by this change.
 
 Rollback is **blocked**, not routine: while affected `append` consumers would be served by old
 replace-with-warning code, reverting the package silently converts composition into replacement. The prerequisite

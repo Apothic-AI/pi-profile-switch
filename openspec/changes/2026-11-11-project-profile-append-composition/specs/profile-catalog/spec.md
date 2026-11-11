@@ -4,22 +4,42 @@
 
 ### Requirement: Profile composition strategy
 
-A profile definition MAY declare a composition strategy. The accepted strategy values SHALL defer to the
-authoritative profile schema in `schemas/profiles.schema.json`. This requirement defines the behavior of the
-`append` value; every other accepted value, and an absent value, SHALL keep complete replacement.
+A profile definition SHALL accept an optional composition strategy in the `promptStrategy` field. The accepted
+value set SHALL be exactly two values, enumerated here and not deferred to a schema that lands later: `append`
+and `replace`. No other value is accepted by this contract, and every implementation SHALL validate against this
+enumeration.
+
+Per scope, the accepted values and the default SHALL be exactly:
+
+- **Project definition:** `"append"` composes with the same-named global definition; `"replace"` replaces it; an
+  omitted `promptStrategy` means `"replace"`.
+- **Global definition:** `"append"` is a field error, because no definition composes a global one; `"replace"` is
+  accepted and inert, behaving exactly as an omitted field.
+
+The `promptStrategy` entry that the implementation stage adds to `schemas/profiles.schema.json` SHALL mirror this
+enumeration. It SHALL NOT be the source of the accepted set: the contract is this requirement, and a design that
+defers the inventory of accepted values to a not-yet-written schema is circular at a design gate.
 
 Reading a definition SHALL retain a declared strategy as a parsed field of that definition. An unsupported
-strategy value SHALL be a field error naming the file, the profile, and the accepted values; it MUST NOT be
-treated as an unknown key that warns and continues.
+strategy value SHALL be a field error naming the file, the profile, and the accepted values `append` and
+`replace`; it MUST NOT be treated as an unknown key that warns and continues.
 
 `append` SHALL be valid only in a project catalog definition. A global definition that declares `append` SHALL
-be a field error, because no definition composes a global one. A global definition that declares the
-replacement value SHALL remain valid and inert: a strategy value SHALL be true in the scope that carries it.
+be a field error, because no definition composes a global one. A global definition that declares `replace`
+SHALL remain valid and inert: a strategy value SHALL be true in the scope that carries it.
 
 A project definition declaring `append` SHALL compose with its same-named global definition when one exists,
 and SHALL stand alone when none exists. Absence of a same-named global definition is not an error and MUST NOT
 produce a fallback to another definition. An existing but invalid same-named global definition SHALL fail
 closed, naming that file; it MUST NOT be partially applied, skipped, or replaced by another definition.
+
+The two inputs are different and SHALL take different branches: **no global file at all** is the standalone
+branch, and **a global file that exists while omitting a declaration** is the composed branch. A standalone
+`append` definition SHALL be resolved by the standalone branch of `resource-reference` "Standalone append
+declaration intent", where the project's own declarations apply as written. The unrestricted-kind rule for an
+existing base — where a kind the base omits stays undeclared and the project's references for it are reported
+as unapplied — SHALL NOT be applied when no base exists, and the project's own references MUST NOT be dropped,
+relabelled unapplied, or described as composed with an empty base.
 
 Composition SHALL be additive only: the composed definition MAY add to what the global half already allows and
 MUST NOT introduce a restriction the global half did not have. Narrowing stays the responsibility of the
@@ -39,10 +59,25 @@ participating files and freshly compose them.
 - **WHEN** a project definition declares no strategy and a same-named global definition exists
 - **THEN** the global definition is not read and the project definition replaces it in full
 
+#### Scenario: Project replace value replaces explicitly
+
+- **WHEN** a project definition declares `"promptStrategy": "replace"` and a same-named global definition exists
+- **THEN** the global definition is not read and the project definition replaces it in full, identically to an omitted field
+
+#### Scenario: Only two strategy values are accepted
+
+- **WHEN** a definition declares any value other than `append` or `replace`
+- **THEN** the profile is rejected with a field error naming the file, the profile, and exactly the accepted values `append` and `replace`
+
 #### Scenario: Append without a namesake stands alone
 
 - **WHEN** a trusted project definition declares `append` and no same-named global definition exists
 - **THEN** resolution succeeds with the project definition alone and reports an informational diagnostic naming the absent base
+
+#### Scenario: Standalone append applies its own declarations rather than an unrestricted rule
+
+- **WHEN** a trusted project definition declares `append`, no same-named global definition exists, and it declares `skills` references
+- **THEN** those references are applied as the definition's own selection, no unapplied-reference diagnostic is produced, and nothing is attributed to an absent global half
 
 #### Scenario: Invalid global base fails closed
 
@@ -126,7 +161,8 @@ decided before reading definition contents.
 A trusted project's same-named definition SHALL completely replace the global definition without merging or
 appending fields, unless that project definition declares the `append` composition strategy, in which case the
 two definitions SHALL compose according to "Profile composition strategy" and the merged result SHALL report the
-project source. Replacement SHALL remain the default for a definition that declares no strategy.
+project source. Replacement SHALL remain the default for a definition that declares no strategy and for a
+definition that declares the explicit `replace` value.
 
 Deleting the project file SHALL reveal the global definition on the next resolution. An invalid project winner
 SHALL remain the winner and SHALL fail according to "Catalog file format validation" rather than revealing the

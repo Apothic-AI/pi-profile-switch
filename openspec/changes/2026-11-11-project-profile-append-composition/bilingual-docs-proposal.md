@@ -20,8 +20,8 @@ without merging fields. Deleting the project file makes the global definition av
 > Set `"promptStrategy": "append"` in a project profile to compose it with its same-named global profile instead.
 > The composed profile may add user-level resources the global selection leaves out, and it never narrows what the
 > global profile already allows; use a replacing profile or `/profile overlay` to narrow. When the project file
-> declares `append` and no global profile of that name exists, the project profile works on its own and reports
-> that no base was found.
+> declares `append` and no global profile of that name exists, the project profile works on its own: its own
+> resource lists apply exactly as written, and a note records that no base was found.
 
 `README.zh-CN.md` — replaces "同名的项目级 profile 完全替换全局 profile，不合并字段。删除项目级文件后，全局定义重新生效。"
 under `### 文件位置与命名`.
@@ -30,7 +30,7 @@ under `### 文件位置与命名`.
 >
 > 在项目级 profile 中设置 `"promptStrategy": "append"`，即可改为与同名的全局 profile 组合。组合后的 profile 可以补充全局选择未包含的
 > 用户级资源，但不会收窄全局 profile 已经允许的内容；需要收窄时请使用替换式的 profile 或 `/profile overlay`。如果项目级文件声明了
-> `append` 但不存在同名全局 profile，项目级 profile 会单独生效，并提示未找到可组合的全局定义。
+> `append` 但不存在同名全局 profile，项目级 profile 会单独生效：其自身的资源列表按原样应用，并提示未找到可组合的全局定义。
 
 ## 2. Field reference row
 
@@ -41,13 +41,13 @@ both field tables.
 
 | Field | Type | Purpose |
 | --- | --- | --- |
-| `promptStrategy` | `string` | Project profiles only: `"append"` composes this definition with the same-named global profile; a replacing profile and an omitted field keep complete replacement. `"append"` is rejected in a global profile. |
+| `promptStrategy` | `string` | Accepted values are exactly `"append"` and `"replace"`; an omitted field means `"replace"`. In a project profile, `"append"` composes this definition with the same-named global profile, and `"replace"` replaces it. `"append"` is rejected in a global profile; `"replace"` is accepted there and changes nothing. |
 
 `README.zh-CN.md`
 
 | 字段 | 类型 | 用途 |
 | --- | --- | --- |
-| `promptStrategy` | `string` | 仅项目级 profile：`"append"` 表示与同名的全局 profile 组合；替换式的 profile 和省略该字段都保持完全替换。在全局 profile 中声明 `"append"` 会被拒绝。 |
+| `promptStrategy` | `string` | 接受的值只有 `"append"` 和 `"replace"`；省略该字段等同于 `"replace"`。在项目级 profile 中，`"append"` 表示与同名的全局 profile 组合，`"replace"` 表示替换。在全局 profile 中声明 `"append"` 会被拒绝；声明 `"replace"` 会被接受，且不产生任何影响。 |
 
 Alignment is free: the existing tables are aligned by a formatter and the documentation test accepts any
 equivalent alignment and prose.
@@ -61,13 +61,15 @@ equivalent alignment and prose.
 > cannot apply is named in a diagnostic instead of being silently dropped. If the global profile leaves a kind
 > unrestricted, adding references to that kind in the project profile is reported as unapplied, because an
 > unrestricted kind already includes everything; declare the kind in the global profile (even as `[]`) to widen it
-> from the project profile.
+> from the project profile. When no global profile of that name exists at all, the project profile's own lists
+> apply exactly as written and nothing is reported as unapplied.
 
 `README.zh-CN.md` — 追加在 `### 资源选择` 中解释省略与 `[]` 区别的段落之后、JSON 示例之前。示例本身不变。
 
 > 在组合后的 profile 中，同一字段的含义相同，只有一点补充：组合后无法应用的引用会在诊断信息中列出，不会被静默丢弃。如果全局 profile
 > 对某一类资源不作限制，那么在项目级 profile 中为这一类添加引用的结果会被报告为“未应用”，因为不作限制本身就代表已包含全部资源；
-> 若希望从项目级 profile 扩展该类资源，请在全局 profile 中声明该字段（即使是 `[]`）。
+> 若希望从项目级 profile 扩展该类资源，请在全局 profile 中声明该字段（即使是 `[]`）。如果根本不存在同名的全局 profile，
+> 项目级 profile 自身的列表按原样应用，不会有任何引用被报告为“未应用”。
 
 ## 4. Project-scope limitation paragraph
 

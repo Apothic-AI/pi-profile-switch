@@ -9,6 +9,10 @@ same-named global definition, `P` = the project definition declaring `append`, `
 Pinned by `profile-catalog` "Profile composition strategy" and `resource-reference` "Composite declaration intent
 and unapplied references".
 
+Every row in this table assumes `G` **exists and was read**. A row whose `G` column is `—` means a base that
+exists and leaves that kind undeclared — not the absence of a global file, which is a different input with its
+own table in §1b.
+
 | `G` list | `P` list | Composite field | Effect | Diagnostic |
 | --- | --- | --- | --- | --- |
 | `—` | `—` | `—` | kind undeclared; native visibility | none |
@@ -24,6 +28,25 @@ and unapplied references".
 Rules that fall out of the table, and must not be re-derived per kind: a composite never emits `[]` where neither
 half declared the field; a project `[]` is never a narrowing of a declared global list; an unapplied reference is
 never reported as `unknown-reference` and never produces a zero-match warning.
+
+## 1b. Standalone `append` (no global file at all)
+
+Pinned by `resource-reference` "Standalone append declaration intent" and `profile-catalog` "Profile composition
+strategy". This table is the answer to "`G` does not exist": the project definition is the resolved definition, and
+the unrestricted-kind rule of §1 does not apply because there is no base declaration.
+
+| `P` list | Composite field | Applied refs | Diagnostics |
+| --- | --- | --- | --- |
+| `—` | `—` | none; native visibility | `append-standalone` only |
+| `[]` | `[]` | declared empty selection; nothing selected | `append-standalone` only |
+| refs | refs | refs expand once, unchanged | `append-standalone` only — never `append-unapplied-reference` |
+
+Non-list fields keep their standalone meaning with no merge step: `instructions` as written (no concatenation),
+scalars as written (no inheritance), `subagents` as written (no per-key merge), `mcp_tools` as written (no
+`append-cannot-narrow`). Composition metadata is informational only: the strategy, "no base read", the project
+path, and `append-standalone`. No selected identity carries a `global` contributor.
+
+A malformed global file is **not** this branch: an existing-but-invalid namesake still fails closed per §4.
 
 ## 2. Per-server `mcp_tools`
 
@@ -92,15 +115,21 @@ plan"; rendered by `in-session-switch` "Composed activation observability".
 | `G` package alias, `P` one of that package's entry names | that entry once | `both` |
 | `G` glob matches nothing, `P` declares nothing | none | zero-match diagnostic (unchanged), no origin entry |
 | both halves name an extension whose entries share an identifier | each entry distinct | keyed by resolved entry path; no cross-merge |
-| tool provided by a package extension, `P` only | resolved at session start | `project`, `at: "session-start"` |
-| built-in tool named in both halves | once | `both`, `at: "boot"` |
-| raw tool reference no tool provides | not selected | pending `at: "session-start"` with its scope, never `unknown` and never "existing tool" |
+| tool provided by a package extension, `P` only | resolved at session start | `project`, `state: "resolved"`, `at: "session-start"` |
+| built-in tool named in both halves | once | `both`, `state: "resolved"`, `at: "boot"` |
+| raw tool reference no built-in provides | not selected at boot | listed in the separate pending list with its scope and `resolvesAt: "session-start"`; never `unknown`, never keyed as a tool, never "existing tool" |
+| pending reference a live tool provides at session start | resolved once | `state: "resolved"`, `at: "session-start"`, contributors unioned; no pending entry remains |
+| pending reference no live tool provides at session start | not selected | `state: "dropped"` through the existing dropped-literal diagnostic; no pending entry remains; no `unknown` claim |
+| pending glob that matches nothing at boot but matches a live tool at session start | resolved at session start | `state: "resolved"`; the boot zero-match accounting is unchanged |
+| `G` omits `skills`, `P` declares `skills: ["review"]`, discovery provides native skills | `review` is **not** selected; native skills are selected | no `global`/`project` contributor for any native skill; `review` listed as unapplied and unvalidated with its file; kind intent is unrestricted/native |
+| standalone `append`, `P` declares `skills: ["review"]` | `review` selected once | `project` |
 | resource selected by the composite, then disabled by the overlay | not currently selected | absent from origins; at most a disabled entry |
 | resource selected by the composite, then removed by an overlay glob | not currently selected | absent; overlay zero-match accounting unchanged |
 
-Invariants: every provenance identity is present in the selection; every selected identity has provenance;
-disagreement is a test failure, never a runtime fallback. A non-composed plan carries no provenance and is
-byte-identical to today's output.
+Invariants: every provenance identity is present in the selection; every identity selected through an **applied
+declared reference** has a provenance entry; an identity selected only natively carries `native` or no entry and
+is never attributed to `global` or `project`; disagreement on those terms is a test failure, never a runtime
+fallback. A non-composed plan carries no provenance and is byte-identical to today's output.
 
 ## 6. Adoption, reload and rollback
 
@@ -115,6 +144,7 @@ deployment truth in `design.md`; release-note obligation in `tasks.md`.
 | `/profile reload` | re-resolves definitions, rewrites managed runtime files, then reloads | picks up an edited `append` file |
 | `/profile use` | existing switch path, writes plan/state, reloads | picks up the new composed result |
 | extension module re-execution | loaded extension code | required before a lane's in-process commands know `promptStrategy` |
+| old code meets an `append` file (older build, other installation or pin, or already-loaded module — install order is irrelevant) | no tree change | warns and **replaces**: the hazard is a property of the file meeting old code, not of an install having happened |
 | revert to a build without the field, `append` consumers present | installed tree | **BLOCKED**: that build warns and replaces |
 | revert after consumers were removed/converted | installed tree | safe; runtime-state needs no repair |
 
@@ -127,7 +157,10 @@ never automatic file deletion.
 
 | Input | Result | Scope of the rule |
 | --- | --- | --- |
-| `promptStrategy` outside the accepted set | field error: file, profile, accepted values | any definition |
+| `promptStrategy` accepted set | exactly `append` and `replace`, enumerated by `profile-catalog` "Profile composition strategy"; the schema mirrors it | any definition |
+| `promptStrategy` outside that set | field error: file, profile, accepted values | any definition |
+| `promptStrategy` omitted | `replace` | any definition |
+| `promptStrategy: "replace"` in a project definition | accepted; identical to absent | project catalog |
 | `promptStrategy: "append"` in a **global** definition | field error: a global definition has no base | global catalog |
 | `promptStrategy` replacement value in a global definition | accepted, inert (`docs/prd.md`); no behavior change | global catalog |
 | `!`-prefixed **glob** in the project half of `append` | field error: inverting selection | the append project half only |
