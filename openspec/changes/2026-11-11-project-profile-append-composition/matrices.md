@@ -118,10 +118,12 @@ plan"; rendered by `in-session-switch` "Composed activation observability".
 | tool provided by a package extension, `P` only | resolved at session start | `project`, `state: "resolved"`, `at: "session-start"` |
 | built-in tool named in both halves | once | `both`, `state: "resolved"`, `at: "boot"` |
 | raw tool reference no built-in provides | not selected at boot | listed in the separate pending list with its scope and `resolvesAt: "session-start"`; never `unknown`, never keyed as a tool, never "existing tool" |
-| pending reference a live tool provides at session start | resolved once | `state: "resolved"`, `at: "session-start"`, contributors unioned; no pending entry remains |
-| pending reference no live tool provides at session start | not selected | `state: "dropped"` through the existing dropped-literal diagnostic; no pending entry remains; no `unknown` claim |
+| pending reference a live tool provides at session start | resolved once | `state: "resolved"`, `at: "session-start"`, contributors unioned; no pending entry remains **in the in-process outcome**; the persisted pre-session-start plan is not rewritten |
+| pending literal no live tool provides at session start | not selected | `state: "dropped"` through the existing `droppedLiterals` diagnostic; no `unknown` claim; in-process only, the persisted plan keeps its boot snapshot |
+| pending reference matching only MCP-owned tools at session start | not selected | `state: "dropped"` through the existing `legacyMcpReferences` diagnostic; no `droppedLiterals` entry; no `unknown` claim |
+| pending glob matching nothing in the live registry at session start | not selected | `state: "dropped"` with zero-match metadata only; neither `droppedLiterals` nor `legacyMcpReferences` is invented, because a zero-match glob is not an unknown literal |
 | pending glob that matches nothing at boot but matches a live tool at session start | resolved at session start | `state: "resolved"`; the boot zero-match accounting is unchanged |
-| `G` omits `skills`, `P` declares `skills: ["review"]`, discovery provides native skills | `review` is **not** selected; native skills are selected | no `global`/`project` contributor for any native skill; `review` listed as unapplied and unvalidated with its file; kind intent is unrestricted/native |
+| `G` omits `skills`, `P` declares `skills: ["review"]`, discovery provides native skills | the project reference is **unapplied**; native skills are selected, and `review` itself MAY be natively visible when discovery provides it | no `global`/`project` contributor for any native skill, including a natively discovered `review`; `review` listed as unapplied and unvalidated with its file; kind intent is unrestricted/native |
 | standalone `append`, `P` declares `skills: ["review"]` | `review` selected once | `project` |
 | resource selected by the composite, then disabled by the overlay | not currently selected | absent from origins; at most a disabled entry |
 | resource selected by the composite, then removed by an overlay glob | not currently selected | absent; overlay zero-match accounting unchanged |

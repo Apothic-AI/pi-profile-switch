@@ -41,10 +41,13 @@ strategies, and it does not change what an existing file does.
   not name is not applied and is diagnosed.
 - Carry reference provenance into the activation plan: contributor scopes per resolved identity, with extension
   provenance keyed by resolved entry path (collision-safe), and tool provenance carrying three states — resolved at
-  boot, pending session-start resolution in a separate list that is never keyed as a tool, and dropped by the
-  session-start expansion through the existing dropped-literal diagnostic. Contributors are threaded through the
-  existing session-start expansion and its caller; no new runtime reader or backend is added, and status claims no
-  resolved per-tool contributor until an existing persistence surface carries one.
+  boot, pending session-start resolution in a separate list that is never keyed as a tool, and dropped in-process by
+  the session-start expansion, where a literal miss keeps the existing `droppedLiterals` diagnostic, an MCP-only
+  match keeps `legacyMcpReferences`, and a no-match glob keeps neither. Contributors are threaded through the
+  existing session-start expansion and its caller; no new runtime reader or backend is added, the persisted plan
+  keeps its boot snapshot so status labels a pending reference boot-snapshot pending with the current session
+  outcome not recorded (UNKNOWN), and status claims no resolved per-tool contributor until an existing persistence
+  surface carries one.
 - Render composition in the status and list surfaces without adding definition reads, writes, or any approval
   step.
 - Fail closed on three inputs only: a strategy value outside the accepted set, `append` in a global definition,

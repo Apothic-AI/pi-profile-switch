@@ -151,8 +151,10 @@ export interface ToolExpansion {
   // ...existing fields (expanded, droppedLiterals, legacyMcpReferences)
   /** Per expanded live tool name: the union of reference contributors, from the plan's raw map. */
   contributors?: Record<string, ContributorSet>;
-  /** Session-start outcomes for references that were pending at boot. `dropped` entries are exactly the
-   *  references already reported through `droppedLiterals` / `legacyMcpReferences`; nothing stays pending. */
+  /** In-process session-start outcomes for references that were pending at boot. A `dropped` entry may be a
+   *  literal reported through `droppedLiterals`, an MCP-only match reported through `legacyMcpReferences`, or a
+   *  no-match glob that those diagnostics never reported; no new warning path is added. Nothing stays pending
+   *  in-process, and the persisted plan is not rewritten (see the status promise below). */
   outcomes?: Record<string, { state: ToolState; contributors: ContributorSet }>;
 }
 
@@ -166,15 +168,18 @@ export function expandToolReferences(
 
 The three states are exhaustive and each transition is defined: boot `resolved` (built-in name only), boot
 `pending` (raw reference, in the separate list), then session start `resolved` or `dropped`. `droppedLiterals`
-keeps its existing meaning and diagnostic; `outcomes` records the same facts per reference so the caller can
-attribute them, and adds no new warning path. The caller is the existing `applyLaunchPlan` tool block; no other
-module reads tool state.
+keeps its existing meaning and diagnostic, `legacyMcpReferences` keeps its own, and a no-match glob keeps its
+existing zero-match accounting and gains neither warning; `outcomes` records the same facts per reference so the
+caller can attribute them, and adds no new warning path. The caller is the existing `applyLaunchPlan` tool block;
+no other module reads tool state.
 
 Changed: `src/switching/apply-plan.ts` — `LaunchPlanFile` gains optional `composition`, the provenance maps, and
 `pendingToolReferences`; nothing else in that module moves. `src/switching/status.ts` and
 `src/switching/list-profiles.ts` read them. The plan file is written before session start, so it can carry only
 declared/pending tool state; a resolved post-session-start per-tool map has no existing carrier and is therefore
-not promised to status (see the status promise above).
+not promised to status (see the status promise above). Because that file is the pre-session-start snapshot, status
+SHALL label a pending reference **boot-snapshot pending / current session outcome not recorded (UNKNOWN)** and
+SHALL NOT claim a current pending, resolved, or dropped outcome, and no extra plan write is introduced to settle it.
 
 ## Decisions
 
@@ -192,9 +197,11 @@ not promised to status (see the status promise above).
 - **Tools carry three states, and pending is a boot-only state.** Boot expansion passes unknown literals
   through, so presence in the boot plan proves nothing about a runtime tool; a raw unmatched reference is a
   separate pending entry, never a name key on the tool map. Session-start is the only moment a tool's existence
-  is knowable, so it resolves or drops every pending reference through the existing expansion. Resolved
-  post-session-start provenance is in-process only until an existing persistence surface carries it, so status
-  makes no resolved per-tool claim. ADR required: `tool-provenance-states`.
+  is knowable, so it resolves or drops every pending reference in-process through the existing expansion; the
+  persisted plan keeps its boot snapshot, so status labels such a reference boot-snapshot pending with the current
+  session outcome not recorded (UNKNOWN) instead of claiming a current state. Resolved post-session-start
+  provenance is in-process only until an existing persistence surface carries it, so status makes no resolved
+  per-tool claim. ADR required: `tool-provenance-states`.
 - **Standalone is a branch, not an empty base.** Decided because the two inputs are different questions: a
   non-existent base has no declaration to widen, so the project's own lists are the selection; a base that exists
   and omits a kind does have a declaration, and the project may not narrow native visibility. Collapsing the two
@@ -213,7 +220,9 @@ not promised to status (see the status promise above).
   contributor sets are unioned so repeats are idempotent.
 - **Unapplied references are static and unvalidated.** Adding a second resolver input for an advisory would
   widen the resolver for a diagnostic; the honest alternative is a fixed diagnostic that states the references
-  were not validated. ADR required: `append-unapplied-reference-diagnostic`.
+  were not validated. Native discovery can still select a resource with the same name; that is native visibility,
+  reported as native, and never attributed to the unapplied reference. ADR required:
+  `append-unapplied-reference-diagnostic`.
 - **Additive-only is the single governing rule**, applied per list kind and per MCP server key. It is what turns
   "project `mcp_tools` entry for an unnamed server" from a silent narrowing into a diagnosis.
 - **Fail closed on exactly three inputs.** A strategy value outside the accepted set, `append` in a global

@@ -44,8 +44,12 @@ it carries the disjoint provenance kind `native` or no per-identity entry, and i
 path, because an identifier can be shared by distinct entries while entry path is the identity selection
 deduplicates on. Tool provenance has three states: a tool resolved before session start, a raw reference still
 pending session-start resolution (held in a separate list, never as a tool name), and a reference the session-start
-expansion dropped. Pending is a boot-stage state only; session start resolves or drops every pending reference and
-leaves the existing dropped-literal diagnostic intact. No new runtime reader or backend is added.
+expansion dropped. Pending is a boot-stage state only; the in-process session start resolves or drops every pending
+reference and leaves the existing diagnostics intact and distinct — a literal miss keeps `droppedLiterals`, an
+MCP-only match keeps `legacyMcpReferences`, and a no-match glob keeps neither, because a zero-match glob is not an
+unknown literal. The persisted plan is the pre-session-start snapshot, so status labels a pending reference
+boot-snapshot pending with the current session outcome not recorded (UNKNOWN) instead of claiming a current state.
+No new runtime reader, plan write, or backend is added.
 
 Trust is unchanged. An untrusted project's catalog is never opened and ordinary global resolution still reads the
 global definition; a replacing winner never reads the global definition; only a trusted `append` winner reads both.

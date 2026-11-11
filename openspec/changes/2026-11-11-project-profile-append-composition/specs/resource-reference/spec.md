@@ -131,7 +131,9 @@ References that cannot be applied because their kind stays undeclared SHALL be r
 references: a static, deterministic diagnostic that names the file and each unapplied reference verbatim. That
 diagnostic SHALL state that the references were not validated against discovery. An unapplied reference MUST NOT
 be reported as an unknown reference, MUST NOT produce a zero-match warning, and MUST NOT be attributed to any
-selected resource. The composed definition MUST NOT claim that a dropped reference contributed to native
+selected resource. Native discovery MAY still select a resource with the same name as an unapplied reference; that
+selection is native visibility, is reported as native, and MUST NOT be attributed to the unapplied reference. The
+composed definition MUST NOT claim that a dropped reference contributed to native
 selection, and a natively selected resource MUST NOT be reported as contributed by `global` or `project` —
 native selection is recorded as a kind-level intent, not as a per-identity contributor.
 
@@ -151,7 +153,7 @@ declaration and its keys are not merged.
 #### Scenario: Native resources are not falsely attributed
 
 - **WHEN** the global half omits `skills`, the project half declares `skills: ["review"]`, and discovery provides other skills natively
-- **THEN** every natively selected skill reports no `global` or `project` contributor, `review` is listed as unapplied and unvalidated, and no provenance/selection invariant fails
+- **THEN** every natively selected skill reports no `global` or `project` contributor, `review` is listed as unapplied and unvalidated, a skill named `review` that discovery itself provides MAY appear as natively visible with no contributor attributed to the unapplied reference, and no provenance/selection invariant fails
 
 #### Scenario: Declared empty base is widened
 
@@ -264,15 +266,23 @@ tool becomes knowable. Exactly three states are defined:
   were a tool. Pending references SHALL live in a separate declarative list carrying the verbatim reference, its
   contributor scopes, and the stage at which it becomes knowable (`session-start`).
 - **`dropped`** — a reference the session-start expansion confirmed matches nothing in the live registry, or one
-  that matched only MCP-owned tools. Dropped SHALL be reported through the existing dropped-literal and
-  legacy-MCP-reference diagnostic paths, SHALL NOT remain pending after session-start, and SHALL NOT be presented
-  as an existing tool.
+  that matched only MCP-owned tools. Dropped SHALL NOT remain pending after the in-process session-start expansion
+  and SHALL NOT be presented as an existing tool. Its existing diagnostics SHALL be kept distinct and none SHALL be
+  invented: a literal miss SHALL retain `droppedLiterals`; a reference matching only MCP-owned tools SHALL retain
+  `legacyMcpReferences`; a glob matching nothing MAY carry its existing zero-match/dropped metadata but MUST NOT
+  produce a `droppedLiterals` or `legacyMcpReferences` warning, because a zero-match glob is not an unknown literal
+  and the existing expansion reports neither for it. No new warning path SHALL be added.
 
-At session start every pending reference SHALL transition to exactly one of `resolved` or `dropped`. A plan read
-after a session-start expansion MUST NOT report a permanently pending reference, and the transition MUST NOT
-suppress or replace the existing dropped-literal and legacy-MCP-reference diagnostics. A reference that resolves
-to a real extension tool, a reference that matches nothing, a glob that matches nothing, and a reference removed
-by the overlay are four different outcomes and SHALL be reported as such.
+At session start, within the in-process expansion, every pending reference SHALL transition to exactly one of
+`resolved` or `dropped`, and the transition MUST NOT suppress, broaden, or replace the existing diagnostics. That
+settlement is in-process only: the plan file is written before session start and no additional plan write, reader,
+backend, or result carrier SHALL be introduced, so a plan read later still carries its pre-session-start state.
+Under that snapshot, status SHALL NOT claim a current `pending`, `resolved`, or `dropped` outcome that no existing
+evidence carries; a pending reference SHALL be labelled **boot-snapshot pending / current session outcome not
+recorded (UNKNOWN)** and MUST NOT be described as currently pending, as currently resolved, or as currently
+dropped. A reference that resolves to a real extension tool, a literal that matches nothing, a glob that matches
+nothing, and a reference removed by the overlay are four different outcomes and SHALL be reported as such, each on
+its own existing path.
 
 Contributors SHALL be threaded through the **existing** session-start expansion and its existing caller, which
 receive the composer's per-reference contributor map, union contributors per expanded identity, and return the
@@ -327,8 +337,8 @@ overlay-removed identity MAY appear only as a disabled entry.
 
 #### Scenario: Session start resolves or drops every pending reference
 
-- **WHEN** the session-start expansion runs for a plan carrying a pending reference
-- **THEN** the reference becomes `resolved` if a live tool provides it and `dropped` otherwise, no reference remains pending, and the existing dropped-literal diagnostic is unchanged
+- **WHEN** the session-start expansion runs in-process for a plan carrying a pending reference
+- **THEN** the reference's in-process outcome is `resolved` if a live tool provides it and `dropped` otherwise, exactly one outcome is recorded per reference, each `dropped` case keeps its own existing diagnostic (a literal miss in `droppedLiterals`, an MCP-only match in `legacyMcpReferences`, a no-match glob in neither), and the persisted pre-session-start plan is unchanged, so status labels the reference boot-snapshot pending with the current session outcome not recorded (UNKNOWN) rather than claiming a current outcome
 
 #### Scenario: Non-composed plan is unchanged
 

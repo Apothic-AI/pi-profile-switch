@@ -19,12 +19,15 @@ selection, SHALL NOT attribute any resource of that kind to a project or global 
 unapplied references with their file. Those references SHALL be listed as unapplied and unvalidated; status MUST
 NOT report them as unknown, as zero-match, or as contributing to the effective selection.
 
-Status SHALL report declared tool references by state. A boot-stage pending reference SHALL be described as
-pending session-start resolution with its contributor scopes and MUST NOT be described as a selected or existing
-tool. A reference the session-start expansion dropped SHALL NOT be described as selected. Per-tool provenance
-resolved after session start SHALL be reported only where an existing persistence surface already carries it;
-until such a carrier exists status MUST NOT claim a resolved per-tool contributor and SHALL NOT add a reader for
-it. No tool entry SHALL be described as pending after a session-start expansion has resolved or dropped it.
+Status SHALL report declared tool references by state, using only the persisted pre-session-start plan that the
+active definition was activated with. A boot-stage pending reference SHALL be labelled **boot-snapshot pending /
+current session outcome not recorded (UNKNOWN)** with its contributor scopes, and MUST NOT be described as
+currently pending, as a selected or existing tool, or as currently resolved or dropped. A reference the
+session-start expansion dropped SHALL NOT be described as selected. Per-tool provenance resolved after session
+start SHALL be reported only where an existing persistence surface already carries it; until such a carrier exists
+status MUST NOT claim a resolved per-tool contributor and SHALL NOT add a reader for it. Status MUST NOT claim a
+current outcome — resolved, dropped, or still pending — that the persisted snapshot and existing evidence do not
+record.
 
 A profile list entry whose winning definition composes with a global namesake SHALL be identifiable as such in
 the list output, without reading unrelated definitions.
@@ -56,7 +59,7 @@ perform additional definition reads, writes, or reapproval steps.
 #### Scenario: Pending and resolved tools are not conflated
 
 - **WHEN** the active plan declares a tool reference the boot expansion did not resolve
-- **THEN** status reports it as pending session-start resolution with its scopes, not as a selected tool, and reports no resolved per-tool contributor unless an existing persistence surface carries one
+- **THEN** status reports it as boot-snapshot pending with the current session outcome not recorded (UNKNOWN) together with its scopes, not as a selected or currently pending tool, claims no current resolved or dropped outcome, and reports no resolved per-tool contributor unless an existing persistence surface carries one
 
 #### Scenario: Status does not contradict the overlay
 

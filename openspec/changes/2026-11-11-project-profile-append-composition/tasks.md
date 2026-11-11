@@ -119,12 +119,16 @@ path. Case numbers (`§1.6`, `§3.3`, …) refer to [test-plan.md](test-plan.md)
 - [ ] 3.2 Resolve tool provenance through the existing session-start expansion: extend `ToolExpansion` and
   `expandToolReferences` with the optional contributor map and per-reference outcomes, keep the three states
   distinct (`resolved` at boot for built-in names, `pending` in the separate `pendingToolReferences` list, and
-  `dropped` through the existing dropped-literal diagnostic at session start), and add no new reader, backend, or
-  runtime entry point. Verification: `npx vitest run test/profile-resolver.test.ts test/apply-plan.test.ts
+  `dropped` at session start, where a literal miss keeps `droppedLiterals`, an MCP-only match keeps
+  `legacyMcpReferences`, and a no-match glob keeps neither and gains no invented warning), and add no new reader,
+  backend, or runtime entry point. Verification: `npx vitest run test/profile-resolver.test.ts test/apply-plan.test.ts
   test/switch-profile.test.ts`; cases §3.4, §3.5, §3.11 and §4. Covers "Unresolved raw tool reference stays pending
   at boot", "Boot and session-start tools are distinguished", "Session start resolves or drops every pending
-  reference". Failure path: a boot pass-through literal keyed as a tool fails §3.4; a reference left pending after
-  session start fails §3.11; an added import of a runtime reader fails the import-surface assertion.
+  reference". Failure path: a boot pass-through literal keyed as a tool fails §3.4; a reference left pending in the
+  in-process outcome after session start fails §3.11; a no-match glob emitting `droppedLiterals` or an MCP-only
+  match collapsed into `droppedLiterals` fails §3.11 and §4; a boot-snapshot status row claiming a current outcome
+  without existing evidence fails §3.11 and §4; an added import of a runtime reader fails the import-surface
+  assertion.
 
 - [ ] 3.3 Carry provenance into the plan file without disturbing the uncomposed shape: `src/switching/apply-plan.ts`
   gains optional `composition`, `extensionOrigins`, `toolOrigins`, `origins`; `src/settings-generator.ts` passes
