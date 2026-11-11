@@ -53,7 +53,7 @@ path. Case numbers (`§1.6`, `§3.3`, …) refer to [test-plan.md](test-plan.md)
 
 ## 2. Stage S1 — composition core, parse, schema, and user docs
 
-- [ ] 2.1 Add `src/profile-composition.ts` (pure; no `node:fs`, no discovery import) exporting
+- [x] 2.1 Add `src/profile-composition.ts` (pure; no `node:fs`, no discovery import) exporting
   `composeProfileDefinitions(global, project, options)` → `{ definition, referenceContributors, unapplied,
   diagnostics, branch }` per `design.md` "Export surface", with the standalone branch taken when `global` is
   `undefined`. Verification: `npx vitest run test/profile-composition.test.ts`;
@@ -63,14 +63,14 @@ path. Case numbers (`§1.6`, `§3.3`, …) refer to [test-plan.md](test-plan.md)
   merged". Failure path: a matrix row from `matrices.md` §1–§3 that the module contradicts fails a named case; a
   standalone reference reported as unapplied fails §1.1b; the purity case fails if any import is added.
 
-- [ ] 2.2 Add explicit strategy parsing to `src/profile-catalog.ts`: `readPromptStrategy` validating against the
+- [x] 2.2 Add explicit strategy parsing to `src/profile-catalog.ts`: `readPromptStrategy` validating against the
   accepted set, throwing `CatalogError` naming file, profile, and accepted values, and assignment into
   `ProfileDefinition`. Do not rely on `supportedFields`, which only drives the unknown-key warning. Verification:
   `npx vitest run test/profile-catalog.test.ts test/profile-composition.test.ts`; cases §2.2, §1.8. Covers
   "Unsupported strategy value is a field error" and the retention paragraph of "Profile composition strategy".
   Failure path: the parse-retention case must fail if only the schema is changed — that is the point of the case.
 
-- [ ] 2.3 Index both halves per name and compose at the catalog boundary: read the global entry **only** for a
+- [x] 2.3 Index both halves per name and compose at the catalog boundary: read the global entry **only** for a
   trusted `append` winner with a namesake; keep `source: "project"`; expose composition metadata and
   `composesGlobal`; do not cache or write the merged definition. Verification:
   `npx vitest run test/profile-catalog.test.ts test/initial-profile.test.ts`; cases §2.1, §2.3–§2.8. Covers
@@ -79,18 +79,18 @@ path. Case numbers (`§1.6`, `§3.3`, …) refer to [test-plan.md](test-plan.md)
   project's catalog files are not read". Failure path: the fs-spy directions fail if a replacement winner reads
   the global file or an untrusted directory opens a project file.
 
-- [ ] 2.4 Enforce the two reference validations where the halves are merged: the append-project-half negated-glob
+- [x] 2.4 Enforce the two reference validations where the halves are merged: the append-project-half negated-glob
   error and nothing else. Verification: `npx vitest run test/profile-composition.test.ts`; cases §1.7. Covers
   "Negated glob in an append project half fails closed" and "Replacement definitions keep today's behavior".
   Failure path: the "did not tighten" case fails if a replacement definition starts rejecting `!`-prefixed globs.
 
-- [ ] 2.5 Add the optional `promptStrategy` field to `schemas/profiles.schema.json` (declared between
+- [x] 2.5 Add the optional `promptStrategy` field to `schemas/profiles.schema.json` (declared between
   `description` and `skills`), and update shipped examples if any profile example would now be misleading.
   Verification: `npx vitest run test/schemas.test.ts test/profile-validation-docs.test.ts`; the schema accepts the
   documented values and rejects an out-of-set value. Failure path: a schema that permits an arbitrary string fails
   the rejection case.
 
-- [ ] 2.6 Sync both README editions with the wording fixed in 1.5: `README.md` and `README.zh-CN.md` — the
+- [x] 2.6 Sync both README editions with the wording fixed in 1.5: `README.md` and `README.zh-CN.md` — the
   project-override paragraph under `### File locations and names` / `### 文件位置与命名`, the new field row in
   `### Field reference` / `### 字段参考`, the composed-profile guidance in `### Resource selection` /
   `### 资源选择`, and the project-scope limitation paragraph. Verification:
@@ -98,7 +98,7 @@ path. Case numbers (`§1.6`, `§3.3`, …) refer to [test-plan.md](test-plan.md)
   compare equal across editions and cover every schema field including `promptStrategy`. Failure path: a
   one-sided edit fails the cross-edition comparison naming the missing field.
 
-- [ ] 2.7 Update `docs/architecture/overview.md` (resolution and filtering model) and `CONTEXT.md` (one term for
+- [x] 2.7 Update `docs/architecture/overview.md` (resolution and filtering model) and `CONTEXT.md` (one term for
   the composed definition, plus the source-scope clarification that a composed result still reports the project
   source). Verification: doc tests above plus a link check on any added reference; the overview must not restate
   the spec tables. Failure path: a claim in the overview that contradicts a spec delta.
