@@ -60,11 +60,15 @@ export function formatProfileList(entries: ProfileListEntry[], activeProfile?: s
 	return entries
 		.map((entry) => {
 			const active = entry.name === activeProfile ? " ← active" : "";
-			const shadowed = entry.shadowsGlobal ? " (shadows global)" : "";
+			// A composing append consumes the global definition as its base: it never
+			// shadows or replaces it, even if a caller supplies a hand-built entry
+			// that still sets the flag. A replacement winner keeps the claim.
+			const composes = entry.composition?.branch === "composed";
+			const shadowed = entry.shadowsGlobal && !composes ? " (shadows global)" : "";
 			// A composing winner is marked from its own resolved metadata: the
 			// standalone branch is stated as such, never as a failure.
 			const composition = entry.composition !== undefined
-				? entry.composition.branch === "composed"
+				? composes
 					? " (append composition)"
 					: " (append, standalone)"
 				: "";

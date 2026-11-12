@@ -464,7 +464,9 @@ describe("promptStrategy and composition at the catalog boundary", () => {
 		const catalog = await ProfileCatalog.load(fixture.agentDir, { projectDir: fixture.cwd });
 
 		const entries = await catalog.list();
-		expect(entries.find((entry) => entry.name === "review")).toMatchObject({ source: "project", shadowsGlobal: true, composesGlobal: true, available: true });
+		// A composing append consumes the global definition as its base; it does not
+		// shadow or replace it (SI S2 review finding).
+		expect(entries.find((entry) => entry.name === "review")).toMatchObject({ source: "project", shadowsGlobal: false, composesGlobal: true, available: true });
 		expect(entries.find((entry) => entry.name === "standalone")).toMatchObject({ source: "project", shadowsGlobal: false, composesGlobal: false, available: true });
 		expect(read.mock.calls.map(([file]) => file).sort()).toEqual([globalPathOf("review"), projectPathOf("review"), projectPathOf("standalone")].sort());
 	});

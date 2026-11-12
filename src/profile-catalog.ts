@@ -96,6 +96,9 @@ export interface ResolvedProfile {
 export interface CatalogListItem {
 	name: string;
 	source: ProfileSource;
+	/** True when a project winner *replaces* a same-named global definition. A
+	 *  winner that composes with that global base (a trusted `append`) does not
+	 *  shadow or replace it, so that entry keeps this false. */
 	shadowsGlobal: boolean;
 	/** True only for a project winner that composes with a global namesake, i.e.
 	 *  a trusted `append` winner whose base exists. Derivable per entry without
@@ -408,8 +411,19 @@ export class ProfileCatalog {
 				const profile = (await this.resolve(name))!;
 				// `composesGlobal` is true only when the winner actually composed with a
 				// global namesake, which the resolved metadata records; no other name's
-				// definition is read to decide it.
-				items.push({ ...profile, ...metadata, composesGlobal: profile.composition?.branch === "composed", available: true });
+				// definition is read to decide it. A composing append consumes the
+				// global definition as its base, so it must not also claim to shadow or
+				// replace it. A replacement winner keeps the shadowing claim, and an
+				// unavailable entry (nothing resolved) keeps its prior metadata because
+				// nothing proves the winner composes.
+				const composesGlobal = profile.composition?.branch === "composed";
+				items.push({
+					...profile,
+					...metadata,
+					shadowsGlobal: metadata.shadowsGlobal && !composesGlobal,
+					composesGlobal,
+					available: true,
+				});
 			} catch (error) {
 				if (!(error instanceof CatalogError)) throw error;
 				items.push({ ...metadata, composesGlobal: false, available: false, error: error.message });
