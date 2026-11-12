@@ -27,13 +27,26 @@ path. Case numbers (`§1.6`, `§3.3`, …) refer to [test-plan.md](test-plan.md)
   composition non-goal bullet; the project-resource bullet is unchanged (`git diff -U0 docs/prd.md` shows no
   hunk over it). Failure path: any edit that implies a profile can restrict project-scope resources.
 
-- [ ] 1.4 `openspec validate --strict` on the change. **BLOCKED in the S0 environment:** the `openspec` CLI is
-  not installed and not on `PATH` (`command -v openspec` → exit 1, `openspec --version` → exit 127, command not
-  found), and installing it is outside this stage's authorization. A pre-existing npx cache of
-  `@fission-ai/openspec` 1.5.0 was invoked read-only from the package directory as supplementary structural
-  evidence only; it is not the required gate, it is not pinned as the required validation environment, and its
-  success does not clear the blocker. The change must be validated with a pinned CLI (or by SI) before S1 starts.
-  Failure path: any validation error is a blocker, not a bypass.
+- [x] 1.4 `openspec validate --strict` on the change. **Cleared on 2026-11-12 by the S3 verification stage.** The S0
+  blocker was environmental, not a property of the change: the `openspec` CLI was absent from `PATH`
+  (`command -v openspec` → exit 1, `openspec --version` → exit 127) and installing it was outside S0's
+  authorization. The CLI is present on this machine in the pre-existing npx cache, so the gate was run against a
+  **pinned** copy of it, offline (`OPENSPEC_TELEMETRY=0`, `DO_NOT_TRACK=1`):
+  `~/.npm/_npx/20f2b75ddc8bce88/node_modules/.bin/openspec`, version `1.5.0`, upstream tarball pinned by the npx
+  install lock (`https://registry.npmjs.org/@fission-ai/openspec/-/openspec-1.5.0.tgz`,
+  `sha512-SLZkyF51gFYkISufZKaka0X04z4y/WCjPOcCB+EC7tALd0TC+7V76BOIzWOSIOhdhBWwh5EMIBhrgLnugIh1DA==`),
+  package file manifest `sha256:1567891abb2352df2f025d26020d35d8d38a30d0d0523cbfe8833d792353c699` over 342 files.
+  Commands and results, run in `src/pi-extensions/pi-profile-switch`:
+  `openspec validate 2026-11-11-project-profile-append-composition --strict --type change` → "is valid", exit 0;
+  `openspec validate --all --strict` → 5 passed, 0 failed, exit 0. OpenSpec 1.5.0 validates a change name against
+  `^[a-z][a-z0-9]*(-[a-z0-9]+)*$` before `status` and `instructions apply` resolve it, so those two commands
+  reject this date-prefixed name while `list` and `validate` accept it; they were therefore run against the same
+  artifacts under a temporary letter-prefixed alias (`d2026-11-11-project-profile-append-composition`) in a scratch
+  copy of `openspec/` made outside the repository, the copy proven byte-identical to the source file for file
+  (`diff -r` clean, 12 file hashes equal) and deleted afterwards. The source change keeps its name and is never
+  renamed, moved or written. Verification: `validation-record.md` records the commands, the exit codes, the pin and
+  the alias procedure. Failure path: any validation error is a blocker, not a bypass; a scratch copy that differs
+  from the source in any file hash is not evidence and is discarded rather than reported.
 
 - [x] 1.5 Fix the bilingual user-facing wording now, before code: `bilingual-docs-proposal.md` contains the exact
   English and Chinese text for the project-override paragraph, the field row, the omitted/empty guidance, and the
@@ -197,5 +210,9 @@ path. Case numbers (`§1.6`, `§3.3`, …) refer to [test-plan.md](test-plan.md)
   ADR-0022, ADR-0003 line, `docs/prd.md` non-goal — all present in this change or recorded as S1 work with paths.
 - Declared checks reject nothing required: no check asserts the absence of a required row, and the byte-identity
   checks are scoped to non-composed plans only.
-- Unresolved conflict: none. Blocked item: 1.4 (CLI absent from `PATH`), recorded rather than bypassed. The cached
-  1.5.0 invocation stands as supplementary structural evidence and is not the gate.
+- Unresolved conflict: none. Blocked item: none — 1.4 was blocked in the S0 environment by the CLI's absence from
+  `PATH` and was cleared on 2026-11-12 with a pinned, offline copy of that CLI
+  (`openspec validate 2026-11-11-project-profile-append-composition --strict --type change` → "is valid", exit 0;
+  `openspec validate --all --strict` → 5 passed, 0 failed, exit 0), and `/opsx-verify` was completed against the
+  CLI's own artifact map; see `validation-record.md`. Stage S4 (5.1, 5.2) stays open: it is release scope owned
+  outside this change.
