@@ -63,6 +63,19 @@ export interface CompositionDiagnostic {
 	message: string;
 }
 
+/** A raw tool reference the boot expansion could not resolve. Never keyed as a
+ *  tool name: presence in the boot plan proves nothing about a runtime tool,
+ *  because boot expansion passes unknown literals through. The persisted plan
+ *  is written before session start, so it carries only this boot-snapshot
+ *  state; the session-start outcome is in-process and is not rewritten into
+ *  the plan. */
+export interface PendingToolReference {
+	/** Verbatim as declared. */
+	reference: string;
+	contributors: ContributorSet;
+	resolvesAt: "session-start";
+}
+
 export interface CompositionResult {
 	definition: ProfileDefinition;
 	/** Per raw reference: the scopes that declared this exact literal. It is

@@ -200,6 +200,11 @@ export async function resolveInitialProfile(
 		mcpDiscovery,
 		overlay: options?.overlay,
 		liveToolNames: options?.liveToolNames,
+		// The composition's per-raw-reference map is the single provenance
+		// input; without it the resolved plan carries no provenance field.
+		...(profile.composition !== undefined
+			? { referenceContributors: profile.composition.referenceContributors }
+			: {}),
 	});
 	warnings.push(...collectPlanDiagnostics(plan, discovery, profile));
 	return { plan, discovery, projectDir, projectTrusted, warnings };

@@ -5,7 +5,9 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { DiscoveredExtensions } from "../src/extension-discovery.ts";
 import type { ProfileDefinition } from "../src/profile-catalog.ts";
+import { compositionMetadata, composeProfileDefinitions } from "../src/profile-composition.ts";
 import { defaultPlan, resolveProfile } from "../src/profile-resolver.ts";
+import type { SkillEntry } from "../src/skill-registry.ts";
 import { generateRuntimeDir, writeRuntimeFiles } from "../src/settings-generator.ts";
 import { resolveModelProfileInNode } from "./helpers/model-profile-runner.ts";
 import { runLauncher } from "./helpers/launcher-runner.ts";
@@ -332,5 +334,102 @@ describe("launcher activation diagnostic deduplication", () => {
 		expect(warnings.filter((line) => line.includes('unknown skill "missing"'))).toHaveLength(1);
 		expect(warnings.filter((line) => line.includes('unknown field "unknownField"'))).toHaveLength(1);
 		expect(output.stdout).not.toContain("warning");
+	});
+});
+
+/**
+ * FT54 S2 §3.3 — provenance reaches the plan file by pass-through only.
+ *
+ * The recorded pre-change file below was produced by this same write path at
+ * the accepted S1 tip before any S2 edit
+ * (`2ae6f74e1fefbe76dd16708df4b1e98ebbda312d`), with the fixture dirs
+ * normalized to placeholders. It is compared byte-for-byte.
+ */
+const RECORDED_PRE_CHANGE_PLAN_FILE = `{
+  "profile": "capture",
+  "source": "global",
+  "agentDir": "<agentDir>",
+  "tools": [
+    "read",
+    "lint-fix"
+  ],
+  "toolReferences": [
+    "read",
+    "lint-fix"
+  ],
+  "resolved": {
+    "skills": [
+      {
+        "name": "alpha",
+        "filePath": "/agent/skills/alpha/SKILL.md"
+      }
+    ],
+    "extensions": []
+  }
+}
+`;
+
+describe("composed plan provenance pass-through (FT54 S2 §3.3)", () => {
+	const fixedSkill = (name: string): SkillEntry => ({
+		name,
+		filePath: `/agent/skills/${name}/SKILL.md`,
+		source: "auto",
+		scope: "user",
+		origin: "top-level",
+	});
+
+	it("carries composition, per-kind intent, and the provenance maps for a composed plan", async () => {
+		const paths = { globalPath: "/global/leader.json", projectPath: "/project/.pi/profiles/leader.json" };
+		const composed = composeProfileDefinitions(
+			{ skills: ["alpha"], tools: ["read"] },
+			{ promptStrategy: "append", skills: ["beta"], tools: ["lint-fix"] },
+			paths,
+		);
+		const plan = await resolveProfile({
+			profile: {
+				name: "composed",
+				source: "project",
+				definition: composed.definition,
+				composition: compositionMetadata(composed, paths),
+			},
+			skills: [fixedSkill("alpha"), fixedSkill("beta"), fixedSkill("gamma")],
+			extensions: new DiscoveredExtensions([], [], []),
+			referenceContributors: composed.referenceContributors,
+		});
+
+		const result = await generateRuntimeDir(plan, { agentDir: fixture.agentDir });
+		const written = JSON.parse(await readFile(path.join(result.runtimeDir, "pi-profile.json"), "utf8"));
+
+		expect(written.composition).toMatchObject({
+			strategy: "append",
+			branch: "composed",
+			globalPath: paths.globalPath,
+			projectPath: paths.projectPath,
+		});
+		expect(written.resourceSelection).toEqual({ skills: true, extensions: false });
+		expect(written.origins).toEqual({ skills: { alpha: "global", beta: "project" } });
+		expect(written.toolOrigins).toEqual({ read: { contributors: "global", state: "resolved", at: "boot" } });
+		expect(written.pendingToolReferences).toEqual([
+			{ reference: "lint-fix", contributors: "project", resolvesAt: "session-start" },
+		]);
+		// No extension was declared and none was selected: no provenance field.
+		expect(written.extensionOrigins).toBeUndefined();
+	});
+
+	it("leaves an uncomposed plan file byte-identical to the recorded pre-change output", async () => {
+		const plan = await resolveProfile({
+			profile: { name: "capture", source: "global", definition: { skills: ["alpha"], tools: ["read", "lint-fix"] } },
+			skills: [fixedSkill("alpha"), fixedSkill("beta")],
+			extensions: new DiscoveredExtensions([], [], []),
+		});
+		// No contributor input: the trace is inactive and no field is added.
+		expect(plan.origins).toBeUndefined();
+
+		const result = await generateRuntimeDir(plan, { agentDir: fixture.agentDir });
+		const text = await readFile(path.join(result.runtimeDir, "pi-profile.json"), "utf8");
+		const normalized = text
+			.replaceAll(result.runtimeDir, "<runtimeDir>")
+			.replaceAll(fixture.agentDir, "<agentDir>");
+		expect(normalized).toBe(RECORDED_PRE_CHANGE_PLAN_FILE);
 	});
 });

@@ -122,3 +122,40 @@ describe("tolerant profile listing", () => {
 		expect(read.mock.calls.map(([file]) => file)).not.toContain(path.join(fixture.profileSwitchDir, "profiles", "shared.json"));
 	});
 });
+
+describe("composition marking (FT54 S2 §3.4)", () => {
+	it("marks a composing winner from its own resolved metadata, reading no unrelated definition", async () => {
+		await writeGlobal({ leader: { skills: ["alpha"] }, other: { label: "other" } });
+		await writeProject({ leader: { promptStrategy: "append", skills: ["beta"] } });
+		await trustProject();
+		const read = vi.spyOn(jsonFile, "readJsonFile");
+		const entries = await listProfiles(input());
+		const leader = entries.find((entry) => entry.name === "leader");
+
+		expect(leader?.composition).toMatchObject({ strategy: "append", branch: "composed" });
+		expect(leader?.shadowsGlobal).toBe(true);
+		expect(formatProfileList(entries)).toContain("leader [project] (shadows global) (append composition)");
+
+		const count = (file: string) => read.mock.calls.filter(([called]) => called === file).length;
+		// One read per listed profile plus the one append base: the mark never
+		// opens another profile's definition.
+		expect(count(path.join(fixture.profileSwitchDir, "profiles", "leader.json"))).toBe(1);
+		expect(count(path.join(fixture.cwd, ".pi", "profiles", "leader.json"))).toBe(1);
+		expect(count(path.join(fixture.profileSwitchDir, "profiles", "other.json"))).toBe(1);
+	});
+
+	it("marks a standalone append as its own branch without reading a missing base", async () => {
+		await writeProject({ solo: { promptStrategy: "append", skills: ["alpha"] } });
+		await trustProject();
+		const read = vi.spyOn(jsonFile, "readJsonFile");
+		const entries = await listProfiles(input());
+		const solo = entries.find((entry) => entry.name === "solo");
+
+		expect(solo?.composition).toMatchObject({ strategy: "append", branch: "standalone" });
+		expect(solo?.composition?.globalPath).toBeUndefined();
+		expect(formatProfileList(entries)).toContain("solo [project] (append, standalone)");
+		expect(read.mock.calls.map(([file]) => file)).not.toContain(
+			path.join(fixture.profileSwitchDir, "profiles", "solo.json"),
+		);
+	});
+});
