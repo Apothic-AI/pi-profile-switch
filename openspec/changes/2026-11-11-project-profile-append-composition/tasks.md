@@ -105,7 +105,7 @@ path. Case numbers (`§1.6`, `§3.3`, …) refer to [test-plan.md](test-plan.md)
 
 ## 3. Stage S2 — the single origin trace
 
-- [ ] 3.1 Thread the trace through the one expansion: `onSelect` on `expandReferences`, `onSelect` on
+- [x] 3.1 Thread the trace through the one expansion: `onSelect` on `expandReferences`, `onSelect` on
   `DiscoveredExtensions.select`, `referenceContributors` input, provenance output on `ActivationPlan` keyed by
   resolved entry path for extensions, with `native` reserved for identities selected through no declaration.
   Nothing else in the resolver or discovery moves. Verification:
@@ -116,7 +116,7 @@ path. Case numbers (`§1.6`, `§3.3`, …) refer to [test-plan.md](test-plan.md)
   which instruments expansion invocations rather than counting `onSelect` callbacks, fails on a per-scope
   expansion; the deep-equality case fails on any unrelated plan change.
 
-- [ ] 3.2 Resolve tool provenance through the existing session-start expansion: extend `ToolExpansion` and
+- [x] 3.2 Resolve tool provenance through the existing session-start expansion: extend `ToolExpansion` and
   `expandToolReferences` with the optional contributor map and per-reference outcomes, keep the three states
   distinct (`resolved` at boot for built-in names, `pending` in the separate `pendingToolReferences` list, and
   `dropped` at session start, where a literal miss keeps `droppedLiterals`, an MCP-only match keeps
@@ -130,13 +130,13 @@ path. Case numbers (`§1.6`, `§3.3`, …) refer to [test-plan.md](test-plan.md)
   without existing evidence fails §3.11 and §4; an added import of a runtime reader fails the import-surface
   assertion.
 
-- [ ] 3.3 Carry provenance into the plan file without disturbing the uncomposed shape: `src/switching/apply-plan.ts`
+- [x] 3.3 Carry provenance into the plan file without disturbing the uncomposed shape: `src/switching/apply-plan.ts`
   gains optional `composition`, `extensionOrigins`, `toolOrigins`, `origins`; `src/settings-generator.ts` passes
   them through only. Verification: `npx vitest run test/apply-plan.test.ts test/settings-generator.test.ts`;
   serialized non-composed plans are byte-identical to the pre-change output. Failure path: any non-optional field
   or reordered key fails the byte-identity comparison.
 
-- [ ] 3.4 Render composition, contributors, unrestricted kinds, unapplied references, pending tool references, and
+- [x] 3.4 Render composition, contributors, unrestricted kinds, unapplied references, pending tool references, and
   overlay truth in `src/switching/status.ts` and `src/switching/list-profiles.ts`, reading only the active plan and
   claiming no resolved per-tool contributor without an existing persistence carrier. Verification:
   `npx vitest run test/status.test.ts test/list-profiles.test.ts test/observability.integration.test.ts`; cases §7.
@@ -147,26 +147,26 @@ path. Case numbers (`§1.6`, `§3.3`, …) refer to [test-plan.md](test-plan.md)
 
 ## 4. Stage S3 — prove, and finish the paper trail
 
-- [ ] 4.1 Discovery boundary proof with a real `SettingsManager` and real `discoverSkills`: extend
+- [x] 4.1 Discovery boundary proof with a real `SettingsManager` and real `discoverSkills`: extend
   `test/sparse-resource-selection.integration.test.ts` and `test/settings-generator-selection.test.ts`. Verification:
   `npx vitest run test/sparse-resource-selection.integration.test.ts test/settings-generator-selection.test.ts`;
   case §5. Covers "Native exclusion stays unselectable" and "Globally unselected but eligible resource is added".
   Failure path: an excluded skill that becomes selectable, or a project-scope skill that disappears, fails the run.
 
-- [ ] 4.2 Generator preservation and the 13-skill fixture: extend `test/settings-generator.test.ts` and
+- [x] 4.2 Generator preservation and the 13-skill fixture: extend `test/settings-generator.test.ts` and
   `test/settings-generator-selection.test.ts`; the fixture declares exactly 13 skills and all assertions beyond
   that are dynamic. Verification: `npx vitest run test/settings-generator.test.ts test/settings-generator-selection.test.ts`;
   case §6. Covers "Declared empty base is widened" and "Empty project list contributes nothing" end to end.
   Failure path: a narrowed `tools` allowlist or a duplicated added skill fails the assertion.
 
-- [ ] 4.3 Launcher proof through `test/helpers/launcher-runner.ts` only: extend
+- [x] 4.3 Launcher proof through `test/helpers/launcher-runner.ts` only: extend
   `test/project-scope.integration.test.ts` and `test/named-profile.integration.test.ts`. Verification:
   `npx vitest run test/project-scope.integration.test.ts test/named-profile.integration.test.ts`; case §8. Covers
   "Project append composes with the global namesake", "Absent strategy keeps complete replacement", "Invalid
   global base fails closed". Failure path: a hung child (stdin not closed by the helper) or a non-zero exit on the
   valid composed case fails the run.
 
-- [ ] 4.4 Full gates on the final tree: `npm run check`, `npm test`, `/opsx-verify`, and `openspec validate
+- [x] 4.4 Full gates on the final tree: `npm run check`, `npm test`, `/opsx-verify`, and `openspec validate
   --strict`. Verification: all four exit successfully on the final tree; `/opsx-verify` is completed and its
   result recorded — `openspec validate --strict` alone does not replace it. Failure path: any non-zero exit blocks
   archive. Task checkboxes are progress, not acceptance.
